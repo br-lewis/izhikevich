@@ -1,0 +1,59 @@
+#version 460
+layout(local_size_x = 1) in;
+
+// https://www.izhikevich.org/publications/spikes.pdf
+struct Neuron {
+    // these are floats, not double
+    // not sure if double precision is necessary
+
+    // parameters
+    float a;
+    float b;
+    float c;
+    float d;
+
+    // state
+    // v is in mV
+    float v;
+    float u;
+};
+
+// 2 buffers:
+// buffer holding neuron information
+// buffer holding spiking info
+
+layout(set = 0, binding = 0) buffer Neurons {
+    Neuron[] neurons;
+};
+
+layout(set = 0, binding = 1) buffer Spikes {
+    uint[] spikes;
+};
+
+uint izhikevich_step(inout Neuron n) {
+
+    // TODO: i is injected direct current, this will probably end up as another
+    // buffer
+    float i = -20.0;
+    float v_next = 0.04*pow(n.v, 2) + 5*n.v + 140 - n.u + i;
+    float u_next = n.a * (n.b * n.v - n.u);
+
+    uint spike = 0;
+    // this could possibly be written out to not have the if which might make
+    // things faster
+    if (v_next >= 30.0) {
+        v_next = n.c;
+        u_next = u_next + n.d;
+        spike = 1;
+    }
+
+    n.v = v_next;
+    n.u = u_next;
+
+    return spike;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    spikes[index] = izhikevich_step(neurons[index]);
+}
