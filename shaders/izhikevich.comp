@@ -2,8 +2,9 @@
 layout(local_size_x = 1) in;
 
 struct Neuron {
-    // these are floats, not double
-    // not sure if double precision is necessary
+    // these are floats, not double. Not sure if double precision is necessary
+    // but that's the default used by Matlab which is used in the example
+    // implementation
 
     // parameters
     float a;
