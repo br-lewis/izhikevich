@@ -1,7 +1,6 @@
 #version 460
 layout(local_size_x = 1) in;
 
-// https://www.izhikevich.org/publications/spikes.pdf
 struct Neuron {
     // these are floats, not double
     // not sure if double precision is necessary
@@ -18,10 +17,9 @@ struct Neuron {
     float u;
 };
 
-// 2 buffers:
-// buffer holding neuron information
-// buffer holding spiking info
-
+// possibly useful to split this buffer into 2
+// 1 to hold the neuron parameters that don't change
+// 1 to hold the neuron state which changes every tick
 layout(set = 0, binding = 0) buffer Neurons {
     Neuron[] neurons;
 };

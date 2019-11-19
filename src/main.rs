@@ -4,7 +4,9 @@ use std::io::Read;
 use std::mem;
 use std::path::Path;
 
-use zerocopy::FromBytes;
+mod izhikevich;
+
+use izhikevich::{Izhikevich, some_neurons};
 
 const SHADER_DIR: &str = "shaders";
 const SHADER_FILE: &str = "izhikevich.comp";
@@ -189,6 +191,9 @@ fn main() {
             },
         );
 
+        // documentation on what exactly this does is sparse but it
+        // seems to block until the maps have been read meaning we 
+        // can read from them multiple times safely
         device.poll(true);
     }
 }
@@ -212,54 +217,4 @@ fn compile_shader() -> shaderc::CompilationArtifact {
             Some(&options),
         )
         .expect("error compiling shader")
-}
-
-#[derive(Debug, Copy, Clone, FromBytes)]
-#[repr(C)]
-struct Izhikevich {
-    decay_rate: f32,
-    sensitivity: f32,
-
-    // mV
-    v_reset: f32,
-    u_reset: f32,
-
-    // mV
-    v: f32,
-    u: f32,
-}
-
-impl Izhikevich {
-    fn state(&self) -> (f32, f32) {
-        (self.v, self.u)
-    }
-}
-
-fn some_neurons() -> Vec<Izhikevich> {
-    vec![
-        Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: 2.0,
-            v_reset: -65.0,
-            u_reset: 2.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-        Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: 0.2,
-            v_reset: -65.0,
-            u_reset: 8.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-        Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: 0.2,
-            v_reset: -65.0,
-            u_reset: 2.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-    ]
 }

@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-test"
+name = "izhikevich"
 version = "0.1.0"
 authors = ["Brian Lewis <keller@csh.rit.edu>"]
 edition = "2018"
