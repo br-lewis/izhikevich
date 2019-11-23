@@ -1,5 +1,6 @@
 
 use zerocopy::FromBytes;
+use rand::prelude::*;
 
 #[derive(Debug, Copy, Clone, FromBytes)]
 #[repr(C)]
@@ -22,31 +23,42 @@ impl Izhikevich {
     }
 }
 
-pub fn some_neurons() -> Vec<Izhikevich> {
-    vec![
-        Izhikevich {
+/// Creates a randomized set of neurons in accordance with the example code from Izhikevich (2003)
+pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Vec<Izhikevich> {
+    let mut neurons = Vec::with_capacity(excitatory + inhibitory);
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..excitatory {
+        let noise: f32 = rng.gen();
+        let b = 0.2;
+        let v = -65.0;
+        let n = Izhikevich {
             decay_rate: 0.02,
-            sensitivity: 2.0,
-            v_reset: -65.0,
+            sensitivity: b,
+            v_reset: v + (15.0 * noise.powi(2)),
+            u_reset: 8.0 - (6.0 * noise.powi(2)),
+            v,
+            u: b * v,
+        };
+
+        neurons.push(n);
+    }
+
+    for _ in 0..inhibitory {
+        let noise: f32 = rng.gen();
+        let b = 0.25 - (0.05 * noise);
+        let v = -65.0;
+        let n = Izhikevich {
+            decay_rate: 0.02 + (0.08 * noise),
+            sensitivity: b,
+            v_reset: v,
             u_reset: 2.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-        Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: 0.2,
-            v_reset: -65.0,
-            u_reset: 8.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-        Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: 0.2,
-            v_reset: -65.0,
-            u_reset: 2.0,
-            v: -60.0,
-            u: -60.0 * 0.2,
-        },
-    ]
+            v,
+            u: b * v,
+        };
+
+        neurons.push(n);
+    }
+
+    neurons
 }

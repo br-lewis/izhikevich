@@ -6,7 +6,7 @@ use std::path::Path;
 
 mod izhikevich;
 
-use izhikevich::{Izhikevich, some_neurons};
+use izhikevich::{randomized_neurons, Izhikevich};
 
 const SHADER_DIR: &str = "shaders";
 const SHADER_FILE: &str = "izhikevich.comp";
@@ -21,7 +21,7 @@ fn main() {
     }
     let steps = args[1].parse::<usize>().expect("invalid timesteps value");
 
-    let neurons = some_neurons();
+    let neurons = randomized_neurons(800, 200);
     let spikes: Vec<u32> = neurons.iter().map(|_| 0).collect();
 
     let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
@@ -125,24 +125,27 @@ fn main() {
         },
     });
 
+    // initial data load
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+    encoder.copy_buffer_to_buffer(
+        &neuron_staging_buffer,
+        0,
+        &neuron_storage_buffer,
+        0,
+        neuron_size,
+    );
+    encoder.copy_buffer_to_buffer(
+        &spike_staging_buffer,
+        0,
+        &spike_storage_buffer,
+        0,
+        spike_size,
+    );
+    queue.submit(&[encoder.finish()]);
+
     for _ in 0..steps {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
-
-        encoder.copy_buffer_to_buffer(
-            &neuron_staging_buffer,
-            0,
-            &neuron_storage_buffer,
-            0,
-            neuron_size,
-        );
-        encoder.copy_buffer_to_buffer(
-            &spike_staging_buffer,
-            0,
-            &spike_storage_buffer,
-            0,
-            spike_size,
-        );
 
         {
             let mut cpass = encoder.begin_compute_pass();
@@ -172,11 +175,12 @@ fn main() {
             0,
             neuron_size,
             |result: wgpu::BufferMapAsyncResult<&[Izhikevich]>| {
-                if let Ok(mapping) = result {
-                    //println!("Neurons: {:?}", mapping.data)
+                if let Ok(_mapping) = result {
+                    /*
                     for neuron in mapping.data {
                         println!("{:?}", neuron.state());
                     }
+                    */
                 }
             },
         );
@@ -185,14 +189,14 @@ fn main() {
             0,
             spike_size,
             |result: wgpu::BufferMapAsyncResult<&[u32]>| {
-                if let Ok(mapping) = result {
-                    println!("Spikes: {:?}", mapping.data);
+                if let Ok(_mapping) = result {
+                    //println!("Spikes: {:?}", mapping.data);
                 }
             },
         );
 
         // documentation on what exactly this does is sparse but it
-        // seems to block until the maps have been read meaning we 
+        // seems to block until the maps have been read meaning we
         // can read from them multiple times safely
         device.poll(true);
     }
