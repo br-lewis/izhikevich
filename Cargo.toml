@@ -3,13 +3,16 @@ name = "izhikevich"
 version = "0.1.0"
 authors = ["Brian Lewis <keller@csh.rit.edu>"]
 edition = "2018"
+build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 wgpu = "0.4.0"
-shaderc = "0.6"
 zerocopy = "0.2.8"
 log = "0.4.0"
 env_logger = "0.7.1"
 rand = "0.7"
+
+[build-dependencies]
+shaderc = "0.6"

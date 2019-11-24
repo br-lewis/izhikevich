@@ -1,15 +1,9 @@
 use std::env;
-use std::fs::File;
-use std::io::Read;
 use std::mem;
-use std::path::Path;
 
 mod izhikevich;
 
 use izhikevich::{randomized_neurons, Izhikevich};
-
-const SHADER_DIR: &str = "shaders";
-const SHADER_FILE: &str = "izhikevich.comp";
 
 fn main() {
     env_logger::init();
@@ -37,8 +31,10 @@ fn main() {
         limits: wgpu::Limits::default(),
     });
 
-    let cs = compile_shader();
-    let cs_module = device.create_shader_module(cs.as_binary());
+    let cs = include_bytes!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"));
+    let cs_module = device.create_shader_module(
+        &wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap()
+    );
 
     let neuron_staging_buffer = device
         .create_buffer_mapped(
@@ -202,23 +198,3 @@ fn main() {
     }
 }
 
-fn compile_shader() -> shaderc::CompilationArtifact {
-    let path = Path::new(SHADER_DIR).join(SHADER_FILE);
-    let mut f = File::open(path).expect("unable to open shader file");
-    let mut buf: String = String::new();
-    f.read_to_string(&mut buf)
-        .expect("unable to read shader file");
-
-    let mut compiler = shaderc::Compiler::new().expect("error creating shader compiler");
-    let options = shaderc::CompileOptions::new().expect("error creating shader compiler options");
-
-    compiler
-        .compile_into_spirv(
-            &buf,
-            shaderc::ShaderKind::Compute,
-            SHADER_FILE,
-            "main",
-            Some(&options),
-        )
-        .expect("error compiling shader")
-}
