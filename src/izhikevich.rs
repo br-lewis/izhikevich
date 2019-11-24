@@ -17,6 +17,7 @@ pub struct Izhikevich {
     u: f32,
 }
 
+#[allow(dead_code)]
 impl Izhikevich {
     pub fn state(&self) -> (f32, f32) {
         (self.v, self.u)
