@@ -31,10 +31,8 @@ fn main() {
         limits: wgpu::Limits::default(),
     });
 
-    let cs = include_bytes!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"));
-    let cs_module = device.create_shader_module(
-        &wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap()
-    );
+    let cs_module =
+        device.create_shader_module(&izhikevich_shader());
 
     let neuron_staging_buffer = device
         .create_buffer_mapped(
@@ -196,5 +194,10 @@ fn main() {
         // can read from them multiple times safely
         device.poll(true);
     }
+}
+
+fn izhikevich_shader() -> Vec<u32> {
+    let cs = include_bytes!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"));
+    wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap()
 }
 
