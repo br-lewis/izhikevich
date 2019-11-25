@@ -34,7 +34,7 @@ uint izhikevich_step(inout Neuron n) {
     // TODO: i is injected direct current, this will probably end up as another
     // buffer
     float i = -20.0;
-    float v_next = 0.04*pow(n.v, 2) + 5*n.v + 140 - n.u + i;
+    float v_next = 0.04*pow(n.v, 2) + 5.0*n.v + 140.0 - n.u + i;
     float u_next = n.a * (n.b * n.v - n.u);
 
     uint spike = 0;

@@ -1,26 +1,44 @@
-
-use zerocopy::FromBytes;
 use rand::prelude::*;
+use zerocopy::FromBytes;
 
 #[derive(Debug, Copy, Clone, FromBytes)]
 #[repr(C)]
 pub struct Izhikevich {
-    decay_rate: f32,
-    sensitivity: f32,
+    pub decay_rate: f32,
+    pub sensitivity: f32,
 
     // mV
-    v_reset: f32,
-    u_reset: f32,
+    pub v_reset: f32,
+    pub u_reset: f32,
 
     // mV
-    v: f32,
-    u: f32,
+    pub v: f32,
+    pub u: f32,
 }
 
 #[allow(dead_code)]
 impl Izhikevich {
     pub fn state(&self) -> (f32, f32) {
         (self.v, self.u)
+    }
+
+    pub fn compute_step(&mut self) -> bool {
+        let i = -20.0;
+        let mut v_next = 0.04 * self.v.powi(2) + 5.0 * self.v + 140.0 - self.u + i;
+        let mut u_next = self.decay_rate * (self.sensitivity * self.v - self.u);
+
+        let spike = if v_next >= 30.0 {
+            v_next = self.v_reset;
+            u_next = u_next + self.u_reset;
+            true
+        } else {
+            false
+        };
+
+        self.v = v_next;
+        self.u = u_next;
+
+        spike
     }
 }
 
