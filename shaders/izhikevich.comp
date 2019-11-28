@@ -5,6 +5,7 @@ struct Neuron {
     // these are floats, not double. Not sure if double precision is necessary
     // but that's the default used by Matlab which is used in the example
     // implementation
+    // but Metal doesn't support doubles at all
 
     // parameters
     float a;

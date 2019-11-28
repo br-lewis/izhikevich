@@ -5,7 +5,6 @@ mod cpu;
 mod gpu;
 mod izhikevich;
 
-use izhikevich::randomized_neurons;
 
 arg_enum! {
     #[derive(Debug)]
@@ -46,10 +45,8 @@ fn main() {
 
     log::info!("{:?}", args);
 
-    let neurons = randomized_neurons(args.num_excitatory, args.num_inhibitory);
-
     match args.comp_type {
-        ComputationType::Cpu => cpu::main(neurons, args.steps),
-        ComputationType::Gpu => gpu::main(neurons, args.steps),
+        ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
+        ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
     }
 }

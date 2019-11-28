@@ -1,8 +1,12 @@
 use std::mem;
 
+use super::izhikevich;
 use super::izhikevich::Izhikevich;
 
-pub(crate) fn main(neurons: Vec<Izhikevich>, time_steps: usize) {
+pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
+
+    let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
+
     let spikes: Vec<u32> = neurons.iter().map(|_| 0).collect();
 
     let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
