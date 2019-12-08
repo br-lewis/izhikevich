@@ -4,7 +4,6 @@ use super::izhikevich;
 use super::izhikevich::Izhikevich;
 
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
-
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
 
     let spikes: Vec<u32> = neurons.iter().map(|_| 0).collect();
@@ -22,15 +21,14 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         limits: wgpu::Limits::default(),
     });
 
-    let cs_module =
-        device.create_shader_module(&izhikevich_shader());
+    let cs_module = device.create_shader_module(&izhikevich_shader());
 
     let neuron_staging_buffer = device
         .create_buffer_mapped(
             neurons.len(),
             wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
         )
-        .fill_from_slice(&neurons);
+        .fill_from_slice(neurons.as_slice().unwrap());
 
     let neuron_size = (neurons.len() * mem::size_of::<Izhikevich>()) as wgpu::BufferAddress;
 

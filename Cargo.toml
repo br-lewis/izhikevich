@@ -16,6 +16,7 @@ rand = "0.7"
 structopt = "0.3"
 clap = "2.33.0"
 rayon = "1.1"
+ndarray = "0.13.0"
 
 [build-dependencies]
 shaderc = "0.6"

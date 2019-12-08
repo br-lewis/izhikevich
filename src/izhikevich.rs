@@ -1,3 +1,6 @@
+use std::iter::FromIterator;
+
+use ndarray::prelude::*;
 use rand::prelude::*;
 use zerocopy::FromBytes;
 
@@ -42,43 +45,37 @@ impl Izhikevich {
 }
 
 /// Creates a randomized set of neurons in accordance with the example code from Izhikevich (2003)
-pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Vec<Izhikevich> {
-    let mut neurons = Vec::with_capacity(excitatory + inhibitory);
+pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Array1<Izhikevich> {
+    let total = excitatory + inhibitory;
     let mut rng = rand::thread_rng();
 
-    for _ in 0..excitatory {
-        let noise: f32 = rng.gen();
-        let b = 0.2;
-        let v = -65.0;
-        let n = Izhikevich {
-            decay_rate: 0.02,
-            sensitivity: b,
-            v_reset: v + (15.0 * noise.powi(2)),
-            u_reset: 8.0 - (6.0 * noise.powi(2)),
-            v,
-            u: b * v,
-        };
-
-        neurons.push(n);
-    }
-
-    for _ in 0..inhibitory {
-        let noise: f32 = rng.gen();
-        let b = 0.25 - (0.05 * noise);
-        let v = -65.0;
-        let n = Izhikevich {
-            decay_rate: 0.02 + (0.08 * noise),
-            sensitivity: b,
-            v_reset: v,
-            u_reset: 2.0,
-            v,
-            u: b * v,
-        };
-
-        neurons.push(n);
-    }
-
-    neurons
+    Array::from_iter((0..total).map(|i| {
+        if i <= excitatory {
+            let noise: f32 = rng.gen();
+            let b = 0.2;
+            let v = -65.0;
+            Izhikevich {
+                decay_rate: 0.02,
+                sensitivity: b,
+                v_reset: v + (15.0 * noise.powi(2)),
+                u_reset: 8.0 - (6.0 * noise.powi(2)),
+                v,
+                u: b * v,
+            }
+        } else {
+            let noise: f32 = rng.gen();
+            let b = 0.25 - (0.05 * noise);
+            let v = -65.0;
+            Izhikevich {
+                decay_rate: 0.02 + (0.08 * noise),
+                sensitivity: b,
+                v_reset: v,
+                u_reset: 2.0,
+                v,
+                u: b * v,
+            }
+        }
+    }))
 }
 
 pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Vec<Vec<f32>> {
@@ -109,7 +106,7 @@ pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Vec<Vec<f
 
         for _ in 0..inhibitory {
             let noise: f32 = rng.gen();
-            row.push( -1.0 * noise );
+            row.push(-1.0 * noise);
         }
 
         connectivity.push(row);
