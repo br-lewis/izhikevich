@@ -78,7 +78,7 @@ pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Array1<Izhike
     }))
 }
 
-pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Vec<Vec<f32>> {
+pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Array2<f32> {
     // The Matlab code declares the connection matrix as
     // S=[0.5*rand(Ne+Ni,Ne), -rand(Ne+Ni,Ni)];
     // which results in a matrix of shape(Ne+Ni, Ne+Ni) with the second array
@@ -94,23 +94,18 @@ pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Vec<Vec<f
     let mut rng = rand::thread_rng();
 
     let total = excitatory + inhibitory;
-    let mut connectivity: Vec<Vec<f32>> = Vec::with_capacity(total);
 
-    for _ in 0..total {
-        let mut row = Vec::with_capacity(total);
-        for _ in 0..excitatory {
+    let mut connections: Array2<f32> = Array::zeros((total, total));
+
+    for ((_y, x), v) in connections.indexed_iter_mut() {
+        if x < excitatory {
             let noise: f32 = rng.gen();
-            let weight = 0.5 * noise;
-            row.push(weight);
-        }
-
-        for _ in 0..inhibitory {
+            *v = 0.5 * noise;
+        } else {
             let noise: f32 = rng.gen();
-            row.push(-1.0 * noise);
+            *v = -1.0 * noise;
         }
-
-        connectivity.push(row);
     }
 
-    connectivity
+    connections
 }

@@ -13,10 +13,12 @@ zerocopy = "0.2.8"
 log = "0.4.0"
 env_logger = "0.7.1"
 rand = "0.7"
+rand_distr = "0.2.2"
 structopt = "0.3"
 clap = "2.33.0"
 rayon = "1.1"
-ndarray = "0.13.0"
+#ndarray = {version = "0.13.0", features = ["rayon"]}
+ndarray = {path = "../ndarray", features = ["rayon"]}
 
 [build-dependencies]
 shaderc = "0.6"
