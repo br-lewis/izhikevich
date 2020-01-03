@@ -13,11 +13,12 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
-    let mut prev_spikes = Array1::<bool>::default(excitatory + inhibitory);
+    let mut prev_spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
+    let mut voltages: Array1<f32> = Array1::zeros(time_steps);
 
-    for _ in 0..time_steps {
+    for t in 0..time_steps {
         let input =
-            thalamic_input(excitatory, inhibitory) + connection_input(&prev_spikes, &connections);
+            thalamic_input(excitatory, inhibitory) + connection_input(&prev_spikes.column(t), &connections);
 
         let spikes: Array1<bool> = neurons
             .iter_mut()
@@ -28,10 +29,16 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
             })
             .collect();
 
+        voltages[t] = neurons[0].v;
+        prev_spikes.column_mut(t).assign(&spikes);
+    }
+
+    for t in 0..time_steps {
+        let spikes = prev_spikes.column(t).map(|&s| if s { 1 } else { 0 });
         println!("{:?}", spikes);
-        let voltages: Vec<f32> = neurons.par_iter().map(|n| n.v).collect();
-        println!("{:?}", voltages);
-        prev_spikes = spikes;
+
+        //let voltage = voltages[t];
+        //println!("{}", voltage);
     }
 }
 
@@ -49,7 +56,7 @@ fn thalamic_input(excitatory: usize, inhibitory: usize) -> Array1<f32> {
     }))
 }
 
-fn connection_input(prev_spikes: &Array1<bool>, connections: &Array2<f32>) -> Array1<f32> {
+fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {
     // this isn't the ideal way of doing this but ndarray doesn't currently support boolean
     // masking so this is the only way to get this to work.
 
