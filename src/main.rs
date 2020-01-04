@@ -23,7 +23,7 @@ struct Args {
     #[structopt(long = "comp-type",
         possible_values = &ComputationType::variants(),
         case_insensitive = true,
-        default_value = "gpu")]
+        default_value = "cpu")]
     comp_type: ComputationType,
 
     /// Number of excitatory neurons to create
@@ -36,6 +36,9 @@ struct Args {
         default_value = "200")]
     num_inhibitory: usize,
     
+    #[structopt(long = "out",
+        default_value = "out.png")]
+    graph_file: String,
 }
 
 fn main() {
@@ -46,7 +49,7 @@ fn main() {
     log::info!("{:?}", args);
 
     match args.comp_type {
-        ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
+        ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
         ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
     }
 }

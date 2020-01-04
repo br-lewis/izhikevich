@@ -19,6 +19,7 @@ clap = "2.33.0"
 rayon = "1.1"
 #ndarray = {version = "0.13.0", features = ["rayon"]}
 ndarray = {path = "../ndarray", features = ["rayon"]}
+gnuplot = "0.0.33"
 
 [build-dependencies]
 shaderc = "0.6"
