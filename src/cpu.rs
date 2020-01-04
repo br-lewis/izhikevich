@@ -48,12 +48,13 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     }
 
     let mut fig = Figure::new();
-    fig.axes2d().set_title("asdf", &[]).points(
-        spike_times,
-        spike_points,
-        &[PlotOption::PointSymbol('.')],
-    );
-    fig.save_to_png(graph_file, 800, 1000)
+    fig.axes2d()
+        .set_pos_grid(2, 1, 0)
+        .points(spike_times, spike_points, &[PlotOption::PointSymbol('.')]);
+    fig.axes2d()
+        .set_pos_grid(2, 1, 1)
+        .lines(0..time_steps, voltages.iter(), &[]);
+    fig.save_to_png(graph_file, 1200, 1400)
         .expect("error writing graph to file");
 }
 
