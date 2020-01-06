@@ -12,7 +12,6 @@ use rand_distr::StandardNormal;
 use super::izhikevich;
 
 /// Currently this is meant to closely replicate the example Matlab code from the paper
-/// to ensure that everything is working how it's supposed to
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
@@ -37,10 +36,20 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         prev_spikes.column_mut(t).assign(&spikes);
     }
 
+    graph_output(graph_file, &prev_spikes, &voltages, &neurons, time_steps);
+}
+
+fn graph_output(
+    graph_file: &str,
+    spikes: &Array2<bool>,
+    voltages: &Array1<f32>,
+    neurons: &Array1<izhikevich::Izhikevich>,
+    time_steps: usize,
+) {
     let mut spike_times = vec![];
     let mut spike_points = vec![];
     for t in 0..time_steps {
-        let spikes_at = prev_spikes.column(t);
+        let spikes_at = spikes.column(t);
         for i in spike_indices(&spikes_at).iter() {
             spike_times.push(t);
             // copy out usize to prevent temp value dropped error
@@ -56,7 +65,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         .points(
             &spike_times,
             &spike_points,
-            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(1.2)],
+            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(0.9)],
         );
     fig.axes2d()
         .set_pos_grid(2, 1, 1)

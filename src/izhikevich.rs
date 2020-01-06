@@ -81,7 +81,7 @@ pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Array2<f3
     // S=[0.5*rand(Ne+Ni,Ne), -rand(Ne+Ni,Ni)];
     // which results in a matrix of shape(Ne+Ni, Ne+Ni) with the second array
     // appended "to the right" of the first
-    // i.e. if it
+    // i.e. if
     // Ne=2, Ni=1
     // [ones(Ne+Ni, Ne), zeros(Ne+Ni, Ni)]
     // would be
