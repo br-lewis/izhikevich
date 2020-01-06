@@ -2,6 +2,7 @@ use std::iter::FromIterator;
 
 use gnuplot::AxesCommon;
 use gnuplot::Figure;
+use gnuplot::Fix;
 use gnuplot::PlotOption;
 
 use ndarray::prelude::*;
@@ -50,9 +51,17 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut fig = Figure::new();
     fig.axes2d()
         .set_pos_grid(2, 1, 0)
-        .points(spike_times, spike_points, &[PlotOption::PointSymbol('.')]);
+        .set_x_range(Fix(0.0), Fix(time_steps as f64))
+        .set_y_range(Fix(0.0), Fix(neurons.len() as f64))
+        .points(
+            &spike_times,
+            &spike_points,
+            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(1.2)],
+        );
     fig.axes2d()
         .set_pos_grid(2, 1, 1)
+        .set_x_range(Fix(0.0), Fix(time_steps as f64))
+        .set_y_range(Fix(-100.0), Fix(30.0))
         .lines(0..time_steps, voltages.iter(), &[]);
     fig.save_to_png(graph_file, 1200, 1400)
         .expect("error writing graph to file");

@@ -26,19 +26,17 @@ impl Izhikevich {
     }
 
     pub fn compute_step(&mut self, i: f32) -> bool {
-        let mut v_next = 0.04 * self.v.powi(2) + 5.0 * self.v + 140.0 - self.u + i;
-        let mut u_next = self.decay_rate * (self.sensitivity * self.v - self.u);
-
-        let spike = if v_next >= 30.0 {
-            v_next = self.v_reset;
-            u_next = u_next + self.u_reset;
+        let spike = if self.v >= 30.0 {
+            self.v = self.v_reset;
+            self.u = self.u + self.u_reset;
             true
         } else {
             false
         };
 
-        self.v = v_next;
-        self.u = u_next;
+        self.v += 0.5 * (0.04 * self.v.powi(2) + 5.0 * self.v + 140.0 - self.u + i);
+        self.v += 0.5 * (0.04 * self.v.powi(2) + 5.0 * self.v + 140.0 - self.u + i);
+        self.u += self.decay_rate * (self.sensitivity * self.v - self.u);
 
         spike
     }
