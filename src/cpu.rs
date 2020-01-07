@@ -59,7 +59,9 @@ fn graph_output(
 
     let mut fig = Figure::new();
     fig.axes2d()
-        .set_pos_grid(2, 1, 0)
+        //.set_pos_grid(2, 1, 0)
+        .set_pos(0.0, 0.2)
+        .set_size(1.0, 0.8)
         .set_x_range(Fix(0.0), Fix(time_steps as f64))
         .set_y_range(Fix(0.0), Fix(neurons.len() as f64))
         .points(
@@ -68,7 +70,9 @@ fn graph_output(
             &[PlotOption::PointSymbol('O'), PlotOption::PointSize(0.9)],
         );
     fig.axes2d()
-        .set_pos_grid(2, 1, 1)
+        //.set_pos_grid(2, 1, 1)
+        .set_pos(0.0, 0.0)
+        .set_size(1.0, 0.2)
         .set_x_range(Fix(0.0), Fix(time_steps as f64))
         .set_y_range(Fix(-100.0), Fix(30.0))
         .lines(0..time_steps, voltages.iter(), &[]);
