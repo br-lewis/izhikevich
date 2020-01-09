@@ -48,8 +48,8 @@ pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Array1<Izhike
     let mut rng = rand::thread_rng();
 
     Array::from_iter((0..total).map(|i| {
+        let noise: f32 = rng.gen();
         if i <= excitatory {
-            let noise: f32 = rng.gen();
             let b = 0.2;
             let v = -65.0;
             Izhikevich {
@@ -61,7 +61,6 @@ pub fn randomized_neurons(excitatory: usize, inhibitory: usize) -> Array1<Izhike
                 u: b * v,
             }
         } else {
-            let noise: f32 = rng.gen();
             let b = 0.25 - (0.05 * noise);
             let v = -65.0;
             Izhikevich {
