@@ -20,8 +20,12 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut voltages: Array1<f32> = Array1::zeros(time_steps);
 
     for t in 0..time_steps {
-        let input = thalamic_input(excitatory, inhibitory)
-            + connection_input(&prev_spikes.column(t), &connections);
+        let ci = if t == 0 {
+            Array1::<f32>::zeros(excitatory+inhibitory)
+        } else {
+            connection_input(&prev_spikes.column(t-1), &connections)
+        };
+        let input = thalamic_input(excitatory, inhibitory) + ci;
 
         let spikes: Array1<bool> = neurons
             .iter_mut()
@@ -59,7 +63,6 @@ fn graph_output(
 
     let mut fig = Figure::new();
     fig.axes2d()
-        //.set_pos_grid(2, 1, 0)
         .set_pos(0.0, 0.2)
         .set_size(1.0, 0.8)
         .set_x_range(Fix(0.0), Fix(time_steps as f64))
@@ -67,10 +70,9 @@ fn graph_output(
         .points(
             &spike_times,
             &spike_points,
-            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(0.9)],
+            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(0.6)],
         );
     fig.axes2d()
-        //.set_pos_grid(2, 1, 1)
         .set_pos(0.0, 0.0)
         .set_size(1.0, 0.2)
         .set_x_range(Fix(0.0), Fix(time_steps as f64))
