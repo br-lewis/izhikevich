@@ -16,18 +16,18 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
-    let mut prev_spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
+    let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
     let mut voltages: Array1<f32> = Array1::zeros(time_steps);
 
     for t in 0..time_steps {
         let ci = if t == 0 {
             Array1::<f32>::zeros(excitatory+inhibitory)
         } else {
-            connection_input(&prev_spikes.column(t-1), &connections)
+            connection_input(&spikes.column(t-1), &connections)
         };
         let input = thalamic_input(excitatory, inhibitory) + ci;
 
-        let spikes: Array1<bool> = neurons
+        let current_spikes: Array1<bool> = neurons
             .iter_mut()
             .enumerate()
             .map(|(i, n)| {
@@ -37,10 +37,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             .collect();
 
         voltages[t] = neurons[0].v;
-        prev_spikes.column_mut(t).assign(&spikes);
+        spikes.column_mut(t).assign(&current_spikes);
     }
 
-    graph_output(graph_file, &prev_spikes, &voltages, &neurons, time_steps);
+    graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
 
 fn graph_output(
