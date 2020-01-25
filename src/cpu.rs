@@ -1,5 +1,5 @@
-use std::iter::FromIterator;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 use flame as f;
 use flamer::flame;
@@ -126,16 +126,22 @@ fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -
     // this isn't the ideal way of doing this but ndarray doesn't currently support boolean
     // masking so this is the only way to get this to work.
 
-    let prev_spike_indices = spike_indices_map(prev_spikes);
+    let mut out = Vec::with_capacity(prev_spikes.len());
 
-    let mut out = Array1::<f32>::zeros(prev_spikes.len());
-    for ((y, x), w) in connections.indexed_iter() {
-        if prev_spike_indices.contains_key(&x) {
-            out[y] += w
-        }
-    }
+    connections
+        .axis_iter(Axis(0)) // iterate across rows
+        .into_par_iter()
+        .map(|row| {
+            row.iter()
+                .zip(prev_spikes)
+                .fold(0.0, |acc, (w, s)| match s {
+                    true => acc + w,
+                    false => acc,
+                })
+        })
+        .collect_into_vec(&mut out);
 
-    out
+    Array1::from(out)
 }
 
 #[flame]
@@ -144,17 +150,6 @@ fn spike_indices(arr: &ArrayView1<bool>) -> Array1<usize> {
         .enumerate()
         .filter_map(|(i, s)| match s {
             true => Some(i),
-            false => None,
-        })
-        .collect()
-}
-
-#[flame]
-fn spike_indices_map(arr: &ArrayView1<bool>) -> HashMap<usize, bool> {
-    arr.iter()
-        .enumerate()
-        .filter_map(|(i, s)| match s {
-            true => Some((i, true)),
             false => None,
         })
         .collect()
