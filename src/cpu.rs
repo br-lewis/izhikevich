@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use flame as f;
@@ -8,6 +7,7 @@ use gnuplot::Figure;
 use gnuplot::Fix;
 use gnuplot::PlotOption;
 use ndarray::prelude::*;
+use ndarray::Zip;
 use rand::prelude::*;
 use rand_distr::StandardNormal;
 use rayon::prelude::*;
@@ -24,6 +24,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
     let mut voltages = Array1::<f32>::zeros(time_steps);
 
+    f::start("neuron calculations");
     for t in 0..time_steps {
         {
             let _guard = f::start_guard("time step calculation");
@@ -39,7 +40,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
 
             {
-                let _neuron_step_guard = f::start_guard("neuron time calculation");
+                let _neuron_step_guard = f::start_guard("neuron timestep calculation");
 
                 (0..neurons.len())
                     .into_par_iter()
@@ -53,15 +54,14 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                     .unzip_into_vecs(&mut new_neurons, &mut current_spikes);
             }
 
-            let current_spikes: Array1<bool> =
-                Array1::<bool>::from_iter(current_spikes.into_iter());
-
-            neurons.assign(&Array::from_iter(new_neurons.into_iter()));
+            let current_spikes = Array::from(current_spikes);
+            neurons.assign(&Array::from(new_neurons));
 
             voltages[t] = neurons[0].v;
             spikes.column_mut(t).assign(&current_spikes);
         }
     }
+    f::end("neuron calculations");
 
     graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
@@ -132,12 +132,21 @@ fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -
         .axis_iter(Axis(0)) // iterate across rows
         .into_par_iter()
         .map(|row| {
+            // this method is a tiny bit faster than the below but nearly equal
+            Zip::from(row)
+                .and(prev_spikes)
+                .fold(0.0, |acc, w, s| match s {
+                    true => acc + w,
+                    false => acc,
+                })
+            /*
             row.iter()
                 .zip(prev_spikes)
                 .fold(0.0, |acc, (w, s)| match s {
                     true => acc + w,
                     false => acc,
                 })
+                */
         })
         .collect_into_vec(&mut out);
 
