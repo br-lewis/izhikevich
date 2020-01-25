@@ -21,5 +21,8 @@ rayon = "1.1"
 ndarray = {path = "../ndarray", features = ["rayon"]}
 gnuplot = "0.0.33"
 
+flame = "0.2.2"
+flamer = "0.3"
+
 [build-dependencies]
 shaderc = "0.6"
