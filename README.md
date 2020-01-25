@@ -4,6 +4,8 @@ neurons](https://www.izhikevich.org/publications/spikes.pdf) running on the CPU
 and in compute shaders on the GPU using
 [`wgpu-rs`](https://github.com/gfx-rs/wgpu-rs).
 
+Right now this is just a replication of the example code in the paper.
+
 ## Dependencies ##
 
 This requires `gnuplot` be available in the `PATH` when plotting output.

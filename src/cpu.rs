@@ -8,8 +8,10 @@ use gnuplot::PlotOption;
 use ndarray::prelude::*;
 use rand::prelude::*;
 use rand_distr::StandardNormal;
+use rayon::prelude::*;
 
 use super::izhikevich;
+use super::izhikevich::Izhikevich;
 
 /// Currently this is meant to closely replicate the example Matlab code from the paper
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
@@ -17,7 +19,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
     let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
-    let mut voltages: Array1<f32> = Array1::zeros(time_steps);
+    let mut voltages = Array1::<f32>::zeros(time_steps);
 
     for t in 0..time_steps {
         let ci = if t == 0 {
@@ -27,6 +29,27 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         };
         let input = thalamic_input(excitatory, inhibitory) + ci;
 
+        /*
+        neurons.zip_mut_with(&input, |n, &i| {
+            n.compute_step(i);
+        });
+        */
+        //let a = neurons.into_par_iter().zip(vec![]);
+
+        let mut new_neurons: Vec<Izhikevich> = Vec::with_capacity(neurons.len());
+        let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
+
+        (0..neurons.len()).into_par_iter().zip_eq(0..input.len()).map(|(n, i)| {
+            let mut neuron = neurons[n];
+            let input = input[i];
+            let s = neuron.compute_step(input);
+            (neuron, s)
+        }).unzip_into_vecs(&mut new_neurons, &mut current_spikes);
+
+        let current_spikes: Array1<bool> = Array1::<bool>::from_iter(current_spikes.into_iter());
+        neurons.assign(&Array::from_iter(new_neurons.into_iter()));
+
+        /*
         let current_spikes: Array1<bool> = neurons
             .iter_mut()
             .enumerate()
@@ -35,6 +58,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                 n.compute_step(i)
             })
             .collect();
+            */
 
         voltages[t] = neurons[0].v;
         spikes.column_mut(t).assign(&current_spikes);
