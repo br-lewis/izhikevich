@@ -15,7 +15,9 @@ use rayon::prelude::*;
 use super::izhikevich;
 use super::izhikevich::Izhikevich;
 
-/// Currently this is meant to closely replicate the example Matlab code from the paper
+/// Currently this is meant to closely replicate the example Matlab code from the paper though
+/// written in a more object oriented style rather than array oriented to be closer to a
+/// theoretically more GPU-friendly style
 #[flame]
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
