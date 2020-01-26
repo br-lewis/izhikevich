@@ -31,24 +31,19 @@ layout(set = 0, binding = 1) buffer Spikes {
 };
 
 uint izhikevich_step(inout Neuron n) {
+    uint spike = 0;
+    if (n.v >= 30.0) {
+        n.v = n.c;
+        n.u = n.u + n.d;
+        spike = 1;
+    }
 
     // TODO: i is injected direct current, this will probably end up as another
     // buffer
     float i = -20.0;
-    float v_next = 0.04*pow(n.v, 2) + 5.0*n.v + 140.0 - n.u + i;
-    float u_next = n.a * (n.b * n.v - n.u);
-
-    uint spike = 0;
-    // this could possibly be written out to not have the if which might make
-    // things faster
-    if (v_next >= 30.0) {
-        v_next = n.c;
-        u_next = u_next + n.d;
-        spike = 1;
-    }
-
-    n.v = v_next;
-    n.u = u_next;
+    n.v = n.v + 0.5 * (0.04 * pow(n.v, 2) + 5.0 * n.v + 140.0 - n.u + i);
+    n.v = n.v + 0.5 * (0.04 * pow(n.v, 2) + 5.0 * n.v + 140.0 - n.u + i);
+    n.u = n.u + n.a * (n.b * n.v - n.u);
 
     return spike;
 }
