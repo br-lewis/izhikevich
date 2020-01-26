@@ -1,3 +1,6 @@
+use flame as f;
+use flamer::flame;
+
 use super::izhikevich;
 use super::izhikevich::Izhikevich;
 
@@ -5,6 +8,7 @@ mod gpu_wrapper;
 
 use gpu_wrapper::GpuWrapper;
 
+#[flame]
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
 
@@ -68,7 +72,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
             },
         });
 
-    // initial data load
+    f::start("initial data load");
     let mut encoder = gw
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -87,8 +91,13 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         spike_buffer.size,
     );
     gw.queue().submit(&[encoder.finish()]);
+    f::end("initial data load");
 
+    f::start("time step calculations");
     for _ in 0..time_steps {
+        let _g = f::start_guard("time step");
+
+        f::start("enqueue calculation");
         let mut encoder = gw
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -117,6 +126,8 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
 
         gw.queue().submit(&[encoder.finish()]);
 
+        f::end("enqueue calculation");
+
         neuron_buffer.staging.map_read_async(
             0,
             neuron_buffer.size,
@@ -144,6 +155,8 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         // documentation on what exactly this does is sparse but it
         // seems to block until the maps have been read meaning we
         // can read from them multiple times safely
-        gw.device().poll(true);
+        f::span_of("polling device", || gw.device().poll(true));
+
     }
+    f::end("time step calculations");
 }
