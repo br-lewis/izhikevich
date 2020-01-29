@@ -23,11 +23,20 @@ struct Neuron {
 // 1 to hold the neuron parameters that don't change
 // 1 to hold the neuron state which changes every tick
 layout(set = 0, binding = 0) buffer Neurons {
+    uint neuron_count;
     Neuron[] neurons;
 };
 
 layout(set = 0, binding = 1) buffer Spikes {
-    uint[] spikes;
+    mat2 spikes;
+};
+
+layout(set = 0, binding = 2) buffer Connections {
+    mat2 connections;
+};
+
+float connection_input(uint i, uint spike_i) {
+    return 0.0;
 };
 
 uint izhikevich_step(inout Neuron n) {
@@ -49,6 +58,8 @@ uint izhikevich_step(inout Neuron n) {
 }
 
 void main() {
-    uint index = gl_GlobalInvocationID.x;
-    spikes[index] = izhikevich_step(neurons[index]);
+    uint i = gl_GlobalInvocationID.x;
+
+    float connection_inputs = connection_input(i, 1);
+    spikes[1][i] = izhikevich_step(neurons[i]);
 }

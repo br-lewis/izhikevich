@@ -1,7 +1,5 @@
 use std::fs::File;
 
-use flamer::flame;
-use flame as f;
 use clap::arg_enum;
 use structopt::StructOpt;
 
@@ -45,7 +43,6 @@ struct Args {
     graph_file: String,
 }
 
-#[flame]
 fn main() {
     env_logger::init();
 
@@ -57,6 +54,4 @@ fn main() {
         ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
         ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
     }
-
-    f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
 }

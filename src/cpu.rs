@@ -1,7 +1,5 @@
 use std::iter::FromIterator;
 
-use flame as f;
-use flamer::flame;
 use gnuplot::AxesCommon;
 use gnuplot::Figure;
 use gnuplot::Fix;
@@ -18,7 +16,6 @@ use super::izhikevich::Izhikevich;
 /// Currently this is meant to closely replicate the example Matlab code from the paper though
 /// written in a more object oriented style rather than array oriented to be closer to a
 /// theoretically more GPU-friendly style
-#[flame]
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
@@ -26,11 +23,8 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
     let mut voltages = Array1::<f32>::zeros(time_steps);
 
-    f::start("neuron calculations");
     for t in 0..time_steps {
         {
-            let _guard = f::start_guard("time step calculation");
-
             let ci = if t == 0 {
                 Array1::<f32>::zeros(excitatory + inhibitory)
             } else {
@@ -40,9 +34,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
             let mut new_neurons: Vec<Izhikevich> = Vec::with_capacity(neurons.len());
             let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
-
-            {
-                let _neuron_step_guard = f::start_guard("neuron timestep calculation");
 
                 (0..neurons.len())
                     .into_par_iter()
@@ -54,7 +45,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                         (neuron, s)
                     })
                     .unzip_into_vecs(&mut new_neurons, &mut current_spikes);
-            }
 
             let current_spikes = Array::from(current_spikes);
             neurons.assign(&Array::from(new_neurons));
@@ -63,12 +53,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             spikes.column_mut(t).assign(&current_spikes);
         }
     }
-    f::end("neuron calculations");
 
     graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
 
-#[flame]
 fn graph_output(
     graph_file: &str,
     spikes: &Array2<bool>,
@@ -108,7 +96,6 @@ fn graph_output(
         .expect("error writing graph to file");
 }
 
-#[flame]
 fn thalamic_input(excitatory: usize, inhibitory: usize) -> Array1<f32> {
     let total = excitatory + inhibitory;
     let mut rng = rand::thread_rng();
@@ -123,7 +110,6 @@ fn thalamic_input(excitatory: usize, inhibitory: usize) -> Array1<f32> {
     }))
 }
 
-#[flame]
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {
     // this isn't the ideal way of doing this but ndarray doesn't currently support boolean
     // masking so this is the only way to get this to work.
@@ -155,7 +141,6 @@ fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -
     Array1::from(out)
 }
 
-#[flame]
 fn spike_indices(arr: &ArrayView1<bool>) -> Array1<usize> {
     arr.iter()
         .enumerate()

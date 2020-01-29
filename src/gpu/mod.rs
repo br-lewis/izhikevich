@@ -1,5 +1,4 @@
-use flame as f;
-use flamer::flame;
+use ndarray::prelude::*;
 
 use super::izhikevich;
 use super::izhikevich::Izhikevich;
@@ -8,16 +7,17 @@ mod gpu_wrapper;
 
 use gpu_wrapper::GpuWrapper;
 
-#[flame]
 pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
-
-    let spikes: Vec<u32> = neurons.iter().map(|_| 0).collect();
+    let connections = izhikevich::randomized_connections(excitatory, inhibitory);
+    let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
 
     let mut gw = GpuWrapper::new();
 
     let neuron_buffer = gw.create_buffer(neurons.as_slice().unwrap());
-    let spike_buffer = gw.create_buffer(&spikes);
+    // this will be created with more permissions than it needs since it's readonly right now
+    let connections_buffer = gw.create_buffer(connections.as_slice().unwrap());
+    let spike_buffer = gw.create_buffer(&spikes.as_slice().unwrap());
 
     let bind_group_layout =
         gw.device()
@@ -39,6 +39,14 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
                             readonly: false,
                         },
                     },
+                    wgpu::BindGroupLayoutBinding {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: false,
+                        },
+                    },
                 ],
             });
 
@@ -52,6 +60,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
             wgpu::Binding {
                 binding: 1,
                 resource: spike_buffer.binding_resource(),
+            },
+            wgpu::Binding {
+                binding: 2,
+                resource: connections_buffer.binding_resource(),
             },
         ],
     });
@@ -72,7 +84,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
             },
         });
 
-    f::start("initial data load");
     let mut encoder = gw
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -90,14 +101,16 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         0,
         spike_buffer.size,
     );
+    encoder.copy_buffer_to_buffer(
+        &connections_buffer.staging,
+        0,
+        &connections_buffer.storage,
+        0,
+        connections_buffer.size,
+    );
     gw.queue().submit(&[encoder.finish()]);
-    f::end("initial data load");
 
-    f::start("time step calculations");
     for _ in 0..time_steps {
-        let _g = f::start_guard("time step");
-
-        f::start("enqueue calculation");
         let mut encoder = gw
             .device()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -126,8 +139,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
 
         gw.queue().submit(&[encoder.finish()]);
 
-        f::end("enqueue calculation");
-
         neuron_buffer.staging.map_read_async(
             0,
             neuron_buffer.size,
@@ -155,8 +166,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         // documentation on what exactly this does is sparse but it
         // seems to block until the maps have been read meaning we
         // can read from them multiple times safely
-        f::span_of("polling device", || gw.device().poll(true));
-
+        gw.device().poll(true);
     }
-    f::end("time step calculations");
 }

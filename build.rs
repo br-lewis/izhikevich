@@ -28,13 +28,16 @@ fn compile_shader(shader: &Path) -> shaderc::CompilationArtifact {
     let mut compiler = shaderc::Compiler::new().expect("error creating shader compiler");
     let options = shaderc::CompileOptions::new().expect("error creating shader compiler options");
 
-    compiler
-        .compile_into_spirv(
-            &buf,
-            shaderc::ShaderKind::Compute,
-            SHADER_FILE,
-            "main",
-            Some(&options),
-        )
-        .expect("error compiling shader")
+    match compiler.compile_into_spirv(
+        &buf,
+        shaderc::ShaderKind::Compute,
+        SHADER_FILE,
+        "main",
+        Some(&options),
+    ) {
+        Ok(data) => data,
+        Err(err) => {
+            panic!("error compiling shader:\n{}", err);
+        }
+    }
 }
