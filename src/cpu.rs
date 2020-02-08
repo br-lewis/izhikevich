@@ -1,17 +1,13 @@
-use std::iter::FromIterator;
-
 use gnuplot::AxesCommon;
 use gnuplot::Figure;
 use gnuplot::Fix;
 use gnuplot::PlotOption;
 use ndarray::prelude::*;
 use ndarray::Zip;
-use rand::prelude::*;
-use rand_distr::StandardNormal;
 use rayon::prelude::*;
 
 use super::izhikevich;
-use super::izhikevich::Izhikevich;
+use super::izhikevich::{Izhikevich, thalamic_input};
 
 /// Currently this is meant to closely replicate the example Matlab code from the paper though
 /// written in a more object oriented style rather than array oriented to be closer to a
@@ -93,20 +89,6 @@ fn graph_output(
         .lines(0..time_steps, voltages.iter(), &[]);
     fig.save_to_png(graph_file, 1200, 1400)
         .expect("error writing graph to file");
-}
-
-fn thalamic_input(excitatory: usize, inhibitory: usize) -> Array1<f32> {
-    let total = excitatory + inhibitory;
-    let mut rng = rand::thread_rng();
-
-    Array::from_iter((0..total).map(|i| {
-        let noise: f32 = rng.sample(StandardNormal);
-        if i < excitatory {
-            5.0 * noise
-        } else {
-            2.0 * noise
-        }
-    }))
 }
 
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {

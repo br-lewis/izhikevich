@@ -2,6 +2,7 @@ use std::iter::FromIterator;
 
 use ndarray::prelude::*;
 use rand::prelude::*;
+use rand_distr::StandardNormal;
 use zerocopy::FromBytes;
 
 #[derive(Debug, Copy, Clone, FromBytes)]
@@ -105,4 +106,18 @@ pub fn randomized_connections(excitatory: usize, inhibitory: usize) -> Array2<f3
     }
 
     connections
+}
+
+pub fn thalamic_input(excitatory: usize, inhibitory: usize) -> Array1<f32> {
+    let total = excitatory + inhibitory;
+    let mut rng = rand::thread_rng();
+
+    Array::from_iter((0..total).map(|i| {
+        let noise: f32 = rng.sample(StandardNormal);
+        if i < excitatory {
+            5.0 * noise
+        } else {
+            2.0 * noise
+        }
+    }))
 }

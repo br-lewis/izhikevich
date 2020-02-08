@@ -24,19 +24,23 @@ layout(set = 0, binding = 0) uniform Config {
     uint time_step;
 };
 
+layout(set = 0, binding = 1) buffer Input {
+    float[] thalamic;
+};
+
 // possibly useful to split this buffer into 2
 // 1 to hold the neuron parameters that don't change
 // 1 to hold the neuron state which changes every tick
-layout(set = 0, binding = 1) buffer Neurons {
+layout(set = 0, binding = 2) buffer Neurons {
     Neuron[] neurons;
 };
 
-layout(set = 0, binding = 2) buffer Spikes {
+layout(set = 0, binding = 3) buffer Spikes {
     uint[] spikes;
 };
 
 // possibly better as a texture?
-layout(set = 0, binding = 3) buffer Connections {
+layout(set = 0, binding = 4) buffer Connections {
     float[] connections;
 };
 
@@ -76,9 +80,9 @@ uint izhikevich_step(inout Neuron n, float i) {
 void main() {
     uint i = gl_GlobalInvocationID.x;
 
-    // TODO: still need to add thalamic input
     float connection_input = connection_input(i, time_step);
+    float thalamic_input = thalamic[i];
 
     uint spike_index = flatten_index(neuron_count, time_step, i);
-    spikes[spike_index] = izhikevich_step(neurons[i], connection_input);
+    spikes[spike_index] = izhikevich_step(neurons[i], connection_input + thalamic_input);
 }
