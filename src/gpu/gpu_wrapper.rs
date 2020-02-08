@@ -30,7 +30,7 @@ impl GpuWrapper {
         }
     }
 
-    pub fn create_buffer<T:'static + Copy>(&self, data: &[T]) -> BufferWrapper {
+    pub fn create_buffer<T: 'static + Copy>(&self, data: &[T]) -> BufferWrapper {
         let staging_buffer = self
             .device()
             .create_buffer_mapped(
@@ -54,30 +54,6 @@ impl GpuWrapper {
             staging: staging_buffer,
             storage: storage_buffer,
             size: size,
-        }
-    }
-
-    pub fn create_struct_buffer<T: 'static + Copy>(&self, data: T) -> BufferWrapper {
-        let staging_buffer = self.device().create_buffer_mapped(
-            1,
-            wgpu::BufferUsage::MAP_READ
-            | wgpu::BufferUsage::COPY_DST
-            | wgpu::BufferUsage::COPY_SRC,
-        ).fill_from_slice(&[data]);
-
-        let size = mem::size_of::<T>() as wgpu::BufferAddress;
-
-        let storage_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
-            size: size,
-            usage: wgpu::BufferUsage::STORAGE
-                | wgpu::BufferUsage::COPY_DST
-                | wgpu::BufferUsage::COPY_SRC,
-        });
-
-        BufferWrapper {
-            staging: staging_buffer,
-            storage: storage_buffer,
-            size,
         }
     }
 

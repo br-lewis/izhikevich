@@ -1,4 +1,3 @@
-use std::fs::File;
 
 use clap::arg_enum;
 use structopt::StructOpt;

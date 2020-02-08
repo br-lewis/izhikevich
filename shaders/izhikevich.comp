@@ -19,27 +19,46 @@ struct Neuron {
     float u;
 };
 
+layout(set = 0, binding = 0) uniform Config {
+    uint neuron_count;
+    uint time_step;
+};
+
 // possibly useful to split this buffer into 2
 // 1 to hold the neuron parameters that don't change
 // 1 to hold the neuron state which changes every tick
-layout(set = 0, binding = 0) buffer Neurons {
-    uint neuron_count;
+layout(set = 0, binding = 1) buffer Neurons {
     Neuron[] neurons;
 };
 
-layout(set = 0, binding = 1) buffer Spikes {
-    mat2 spikes;
+layout(set = 0, binding = 2) buffer Spikes {
+    uint[] spikes;
 };
 
-layout(set = 0, binding = 2) buffer Connections {
-    mat2 connections;
+// possibly better as a texture?
+layout(set = 0, binding = 3) buffer Connections {
+    float[] connections;
 };
+
+uint flatten_index(uint width, uint x, uint y) {
+    return (y * width) + x;
+}
 
 float connection_input(uint i, uint spike_i) {
-    return 0.0;
-};
+    if (spike_i == 0) {
+        return 0.0;
+    }
 
-uint izhikevich_step(inout Neuron n) {
+    float total = 0.0;
+    for (uint j=0; j < neuron_count; j++) {
+        uint conn_index = flatten_index(neuron_count, i, j);
+        uint spike_index = flatten_index(neuron_count, spike_i, j);
+        total += connections[conn_index] * spikes[spike_index];
+    }
+    return total;
+}
+
+uint izhikevich_step(inout Neuron n, float i) {
     uint spike = 0;
     if (n.v >= 30.0) {
         n.v = n.c;
@@ -47,9 +66,6 @@ uint izhikevich_step(inout Neuron n) {
         spike = 1;
     }
 
-    // TODO: i is injected direct current, this will probably end up as another
-    // buffer
-    float i = -20.0;
     n.v = n.v + 0.5 * (0.04 * pow(n.v, 2) + 5.0 * n.v + 140.0 - n.u + i);
     n.v = n.v + 0.5 * (0.04 * pow(n.v, 2) + 5.0 * n.v + 140.0 - n.u + i);
     n.u = n.u + n.a * (n.b * n.v - n.u);
@@ -60,6 +76,9 @@ uint izhikevich_step(inout Neuron n) {
 void main() {
     uint i = gl_GlobalInvocationID.x;
 
-    float connection_inputs = connection_input(i, 1);
-    spikes[1][i] = izhikevich_step(neurons[i]);
+    // TODO: still need to add thalamic input
+    float connection_input = connection_input(i, time_step);
+
+    uint spike_index = flatten_index(neuron_count, time_step, i);
+    spikes[spike_index] = izhikevich_step(neurons[i], connection_input);
 }
