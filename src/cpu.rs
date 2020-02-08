@@ -24,34 +24,33 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let mut voltages = Array1::<f32>::zeros(time_steps);
 
     for t in 0..time_steps {
-        {
-            let ci = if t == 0 {
-                Array1::<f32>::zeros(excitatory + inhibitory)
-            } else {
-                connection_input(&spikes.column(t - 1), &connections)
-            };
-            let input = thalamic_input(excitatory, inhibitory) + ci;
+        let ci = if t == 0 {
+            Array1::<f32>::zeros(excitatory + inhibitory)
+        } else {
+            connection_input(&spikes.column(t - 1), &connections)
+        };
+        let input = thalamic_input(excitatory, inhibitory) + ci;
 
-            let mut new_neurons: Vec<Izhikevich> = Vec::with_capacity(neurons.len());
-            let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
+        let mut new_neurons: Vec<Izhikevich> = Vec::with_capacity(neurons.len());
+        let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
 
-                (0..neurons.len())
-                    .into_par_iter()
-                    .zip_eq(0..input.len())
-                    .map(|(n, i)| {
-                        let mut neuron = neurons[n];
-                        let input = input[i];
-                        let s = neuron.compute_step(input);
-                        (neuron, s)
-                    })
-                    .unzip_into_vecs(&mut new_neurons, &mut current_spikes);
+        (0..neurons.len())
+            .into_par_iter()
+            .zip_eq(0..input.len())
+            .map(|(n, i)| {
+                let mut neuron = neurons[n];
+                let input = input[i];
+                let s = neuron.compute_step(input);
+                (neuron, s)
+            })
+            .unzip_into_vecs(&mut new_neurons, &mut current_spikes);
 
-            let current_spikes = Array::from(current_spikes);
-            neurons.assign(&Array::from(new_neurons));
+        let current_spikes = Array::from(current_spikes);
+        neurons.assign(&Array::from(new_neurons));
 
-            voltages[t] = neurons[0].v;
-            spikes.column_mut(t).assign(&current_spikes);
-        }
+        voltages[t] = neurons[0].v;
+        println!("{}", neurons[0].v);
+        spikes.column_mut(t).assign(&current_spikes);
     }
 
     graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
