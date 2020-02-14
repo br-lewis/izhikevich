@@ -20,12 +20,7 @@ pub struct Izhikevich {
     pub u: f32,
 }
 
-#[allow(dead_code)]
 impl Izhikevich {
-    pub fn state(&self) -> (f32, f32) {
-        (self.v, self.u)
-    }
-
     pub fn compute_step(&mut self, i: f32) -> bool {
         let spike = if self.v >= 30.0 {
             self.v = self.v_reset;

@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use ndarray::prelude::*;
 
 use super::izhikevich;
@@ -241,16 +243,16 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
     encoder.copy_buffer_to_buffer(
-        &neuron_buffer.staging,
-        0,
         &neuron_buffer.storage,
+        0,
+        &neuron_buffer.staging,
         0,
         neuron_buffer.size,
     );
     encoder.copy_buffer_to_buffer(
-        &spike_buffer.staging,
-        0,
         &spike_buffer.storage,
+        0,
+        &spike_buffer.staging,
         0,
         spike_buffer.size,
     );
@@ -274,9 +276,17 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
     spike_buffer.staging.map_read_async(
         0,
         spike_buffer.size,
-        |result: wgpu::BufferMapAsyncResult<&[u32]>| {
+        move |result: wgpu::BufferMapAsyncResult<&[u32]>| {
             if let Ok(mapping) = result {
-                println!("Spikes: {:?}", mapping.data);
+
+                let spikes_per_time: Array2<u32> = Array::from_shape_vec((neurons.len(), time_steps), mapping.data.to_vec()).unwrap();
+                super::cpu::graph_output(
+                    "out.png",
+                    &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
+                    &Array::from_iter((0..neurons.len()).map(|_| 0.0)),
+                    &neurons,
+                    time_steps,
+                );
             }
         },
     );

@@ -52,7 +52,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
 
-fn graph_output(
+pub fn graph_output(
     graph_file: &str,
     spikes: &Array2<bool>,
     voltages: &Array1<f32>,
