@@ -16,23 +16,26 @@ arg_enum! {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "izhikevich")]
 struct Args {
+    /// how many timesteps to simulate (each step is equivalent to 1ms)
     #[structopt(default_value = "1")]
     steps: usize,
 
+    /// whether to use the CPU or GPU for neuron timestep computation
     #[structopt(long = "comp-type",
         possible_values = &ComputationType::variants(),
         case_insensitive = true,
         default_value = "cpu")]
     comp_type: ComputationType,
 
-    /// Number of excitatory neurons to create
+    /// number of excitatory neurons to create
     #[structopt(long = "ne", default_value = "800")]
     num_excitatory: usize,
 
-    /// Number of inhibitory neurons to create
+    /// number of inhibitory neurons to create
     #[structopt(long = "ni", default_value = "200")]
     num_inhibitory: usize,
 
+    /// path to output file that will be created/overwritten
     #[structopt(long = "out", default_value = "out.png")]
     graph_file: String,
 }
