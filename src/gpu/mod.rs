@@ -28,6 +28,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let connections_buffer = gw.create_buffer(connections.as_slice().unwrap());
     let spike_buffer = gw.create_buffer(&spikes.as_slice().unwrap());
 
+    // TODO: try to generally clean up the rest of the buffer and bind group creation
     let config = Config {
         neurons: (excitatory + inhibitory) as u32,
         time_step: 0,
