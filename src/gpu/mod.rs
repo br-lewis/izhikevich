@@ -16,7 +16,7 @@ struct Config {
     time_step: u32,
 }
 
-pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
+pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
@@ -46,17 +46,24 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
     });
 
     let initial_thalamic_input = izhikevich::thalamic_input(excitatory, inhibitory);
+    let thalamic_buffer_size =
+        (initial_thalamic_input.len() * std::mem::size_of::<f32>()) as wgpu::BufferAddress;
 
+    // thalamic input uses random noise which is hard to do on a GPU so we generate it on the CPU
+    // and copy it over every time step
     let thalamic_staging_buffer = gw
         .device()
-        .create_buffer_mapped(initial_thalamic_input.len(), wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::COPY_DST)
+        .create_buffer_mapped(
+            initial_thalamic_input.len(),
+            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::COPY_DST,
+        )
         .fill_from_slice(&initial_thalamic_input.as_slice().unwrap());
-
-    let thalamic_buffer_size = (initial_thalamic_input.len() * std::mem::size_of::<f32>()) as wgpu::BufferAddress;
 
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
         size: thalamic_buffer_size,
-        usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+        usage: wgpu::BufferUsage::STORAGE
+            | wgpu::BufferUsage::COPY_DST
+            | wgpu::BufferUsage::COPY_SRC,
     });
 
     let bind_group_layout =
@@ -71,7 +78,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
                     wgpu::BindGroupLayoutBinding {
                         binding: 1,
                         visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer { dynamic: false, readonly: false },
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: false,
+                        },
                     },
                     wgpu::BindGroupLayoutBinding {
                         binding: 2,
@@ -212,7 +222,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
             .create_buffer_mapped(thalamic_input.len(), wgpu::BufferUsage::COPY_SRC)
             .fill_from_slice(&thalamic_input.as_slice().unwrap());
 
-
         encoder.copy_buffer_to_buffer(
             &config_staging_buffer,
             0,
@@ -273,15 +282,17 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize) {
         },
     );
 
+    let graph_file = graph_file.to_owned();
     spike_buffer.staging.map_read_async(
         0,
         spike_buffer.size,
         move |result: wgpu::BufferMapAsyncResult<&[u32]>| {
             if let Ok(mapping) = result {
-
-                let spikes_per_time: Array2<u32> = Array::from_shape_vec((neurons.len(), time_steps), mapping.data.to_vec()).unwrap();
+                let spikes_per_time: Array2<u32> =
+                    Array::from_shape_vec((neurons.len(), time_steps), mapping.data.to_vec())
+                        .unwrap();
                 super::cpu::graph_output(
-                    "out.png",
+                    &graph_file,
                     &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
                     &Array::from_iter((0..neurons.len()).map(|_| 0.0)),
                     &neurons,

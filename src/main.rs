@@ -51,6 +51,6 @@ fn main() {
 
     match args.comp_type {
         ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
-        ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory),
+        ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
     }
 }
