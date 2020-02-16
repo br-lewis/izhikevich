@@ -5,7 +5,8 @@ struct Neuron {
     // these are floats, not double. Not sure if double precision is necessary
     // but that's the default used by Matlab which is used in the example
     // implementation
-    // but Metal doesn't support doubles at all
+    // but Metal doesn't support doubles at all so we'll use floats since it
+    // doesn't seem to be negatively impacting the results
 
     // parameters
     float a;
@@ -36,14 +37,16 @@ layout(set = 0, binding = 2) buffer Neurons {
 };
 
 layout(set = 0, binding = 3) buffer Spikes {
+    // 2D array of spikes for a given timestep
     uint[] spikes;
 };
 
-// possibly better as a texture?
 layout(set = 0, binding = 4) buffer Connections {
+    // 2D array of connection weights between neurons
     float[] connections;
 };
 
+// map 2D coordinate to 1D location in flattened arrays
 uint flatten_index(uint width, uint y, uint x) {
     return (y * width) + x;
 }

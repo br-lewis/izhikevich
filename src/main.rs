@@ -1,11 +1,9 @@
-
 use clap::arg_enum;
 use structopt::StructOpt;
 
 mod cpu;
 mod gpu;
 mod izhikevich;
-
 
 arg_enum! {
     #[derive(Debug)]
@@ -28,17 +26,14 @@ struct Args {
     comp_type: ComputationType,
 
     /// Number of excitatory neurons to create
-    #[structopt(long = "ne",
-        default_value = "800")]
+    #[structopt(long = "ne", default_value = "800")]
     num_excitatory: usize,
 
     /// Number of inhibitory neurons to create
-    #[structopt(long = "ni",
-        default_value = "200")]
+    #[structopt(long = "ni", default_value = "200")]
     num_inhibitory: usize,
-    
-    #[structopt(long = "out",
-        default_value = "out.png")]
+
+    #[structopt(long = "out", default_value = "out.png")]
     graph_file: String,
 }
 
@@ -50,7 +45,17 @@ fn main() {
     log::info!("{:?}", args);
 
     match args.comp_type {
-        ComputationType::Cpu => cpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
-        ComputationType::Gpu => gpu::main(args.steps, args.num_excitatory, args.num_inhibitory, &args.graph_file),
+        ComputationType::Cpu => cpu::main(
+            args.steps,
+            args.num_excitatory,
+            args.num_inhibitory,
+            &args.graph_file,
+        ),
+        ComputationType::Gpu => gpu::main(
+            args.steps,
+            args.num_excitatory,
+            args.num_inhibitory,
+            &args.graph_file,
+        ),
     }
 }

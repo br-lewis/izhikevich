@@ -45,7 +45,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         neurons.assign(&Array::from(new_neurons));
 
         voltages[t] = neurons[0].v;
-        println!("{}", neurons[0].v);
         spikes.column_mut(t).assign(&current_spikes);
     }
 
