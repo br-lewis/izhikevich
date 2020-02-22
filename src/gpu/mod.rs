@@ -13,6 +13,7 @@ use gpu_wrapper::GpuWrapper;
 #[repr(C)]
 struct Config {
     neurons: u32,
+    total_time_steps: u32,
     time_step: u32,
 }
 
@@ -31,6 +32,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     // TODO: try to generally clean up the rest of the buffer and bind group creation
     let config = Config {
         neurons: (excitatory + inhibitory) as u32,
+        total_time_steps: time_steps as u32,
         time_step: 0,
     };
 
@@ -204,6 +206,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     for t in 0..time_steps {
         let config = Config {
             neurons: neurons.len() as u32,
+            total_time_steps: time_steps as u32,
             time_step: t as u32,
         };
 
@@ -295,7 +298,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                 super::cpu::graph_output(
                     &graph_file,
                     &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
-                    &Array::from_iter((0..neurons.len()).map(|_| 0.0)),
+                    &Array::from_iter((0..time_steps).map(|_| 0.0)),
                     &neurons,
                     time_steps,
                 );

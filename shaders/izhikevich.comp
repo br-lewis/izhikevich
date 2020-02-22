@@ -22,6 +22,7 @@ struct Neuron {
 
 layout(set = 0, binding = 0) uniform Config {
     uint neuron_count;
+    uint total_time_steps;
     uint time_step;
 };
 
@@ -59,7 +60,7 @@ float connection_input(uint i, uint time_step) {
     float total = 0.0;
     for (uint j=0; j < neuron_count; j++) {
         uint conn_index = flatten_index(neuron_count, i, j);
-        uint spike_index = flatten_index(neuron_count, j, time_step);
+        uint spike_index = flatten_index(total_time_steps, j, time_step);
         total += connections[conn_index] * spikes[spike_index];
     }
     return total;
@@ -86,6 +87,6 @@ void main() {
     float connection_input = connection_input(i, time_step-1);
     float thalamic_input = thalamic[i];
 
-    uint spike_index = flatten_index(neuron_count, i, time_step);
+    uint spike_index = flatten_index(total_time_steps, i, time_step);
     spikes[spike_index] = izhikevich_step(neurons[i], connection_input + thalamic_input);
 }
