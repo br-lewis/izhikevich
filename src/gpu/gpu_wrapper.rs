@@ -1,5 +1,7 @@
 use std::mem;
 
+use zerocopy::AsBytes;
+
 pub struct GpuWrapper {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -8,10 +10,10 @@ pub struct GpuWrapper {
 
 impl GpuWrapper {
     pub fn new() -> Self {
-        let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            backends: wgpu::BackendBit::PRIMARY,
-        })
+        let adapter = wgpu::Adapter::request(
+            &wgpu::RequestAdapterOptions::default(),
+            wgpu::BackendBit::PRIMARY,
+        )
         .expect("error creating adapter");
 
         let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
@@ -30,16 +32,11 @@ impl GpuWrapper {
         }
     }
 
-    pub fn create_buffer<T: 'static + Copy>(&self, data: &[T]) -> BufferWrapper {
-        let staging_buffer = self
-            .device()
-            .create_buffer_mapped(
-                data.len(),
-                wgpu::BufferUsage::MAP_READ
-                    | wgpu::BufferUsage::COPY_DST
-                    | wgpu::BufferUsage::COPY_SRC,
-            )
-            .fill_from_slice(data);
+    pub fn create_buffer<T: 'static + Copy + AsBytes>(&self, data: &[T]) -> BufferWrapper {
+        let staging_buffer = self.device().create_buffer_with_data(
+            data.as_bytes(),
+            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+        );
 
         let size = (data.len() * mem::size_of::<T>()) as wgpu::BufferAddress;
 

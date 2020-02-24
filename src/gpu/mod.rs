@@ -1,15 +1,18 @@
+use std::convert::TryInto;
 use std::iter::FromIterator;
 
+use futures::executor::block_on;
 use ndarray::prelude::*;
+use zerocopy::AsBytes;
 
 use super::izhikevich;
-use super::izhikevich::Izhikevich;
+//use super::izhikevich::Izhikevich;
 
 mod gpu_wrapper;
 
 use gpu_wrapper::GpuWrapper;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, AsBytes)]
 #[repr(C)]
 struct Config {
     neurons: u32,
@@ -36,10 +39,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         time_step: 0,
     };
 
-    let config_staging_buffer = gw
-        .device()
-        .create_buffer_mapped(1, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC)
-        .fill_from_slice(&[config]);
+    let config_staging_buffer = gw.device().create_buffer_with_data(
+        config.as_bytes(),
+        wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
+    );
 
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
 
@@ -54,13 +57,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     // thalamic input uses random noise which is hard to do on a GPU so we generate it on the CPU
     // and copy it over every time step
-    let thalamic_staging_buffer = gw
-        .device()
-        .create_buffer_mapped(
-            initial_thalamic_input.len(),
-            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::COPY_DST,
-        )
-        .fill_from_slice(&initial_thalamic_input.as_slice().unwrap());
+    let thalamic_staging_buffer = gw.device().create_buffer_with_data(
+        initial_thalamic_input.as_slice().unwrap().as_bytes(),
+        wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::COPY_DST,
+    );
 
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
         size: thalamic_buffer_size,
@@ -218,13 +218,12 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
         let config_staging_buffer = gw
             .device()
-            .create_buffer_mapped(1, wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(&[config]);
+            .create_buffer_with_data(config.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
-        let input_buffer = gw
-            .device()
-            .create_buffer_mapped(thalamic_input.len(), wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(&thalamic_input.as_slice().unwrap());
+        let input_buffer = gw.device().create_buffer_with_data(
+            thalamic_input.as_slice().unwrap().as_bytes(),
+            wgpu::BufferUsage::COPY_SRC,
+        );
 
         encoder.copy_buffer_to_buffer(
             &config_staging_buffer,
@@ -272,6 +271,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     gw.queue().submit(&[encoder.finish()]);
 
+    /*
     neuron_buffer.staging.map_read_async(
         0,
         neuron_buffer.size,
@@ -285,8 +285,33 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             }
         },
     );
+    */
 
     let graph_file = graph_file.to_owned();
+
+    dbg!("waiting on final data");
+    dbg!(spike_buffer.size);
+    if let Ok(mapping) = block_on(spike_buffer.staging.map_read(0, spike_buffer.size)) {
+        dbg!("got final data");
+        let raw: Vec<u32> = mapping
+            .as_slice()
+            .chunks_exact(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .collect();
+
+        let spikes_per_time: Array2<u32> =
+            Array::from_shape_vec((neurons.len(), time_steps), raw).unwrap();
+
+        super::cpu::graph_output(
+            &graph_file,
+            &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
+            &Array::from_iter((0..time_steps).map(|_| 0.0)),
+            &neurons,
+            time_steps,
+        );
+    }
+
+    /*
     spike_buffer.staging.map_read_async(
         0,
         spike_buffer.size,
@@ -305,9 +330,10 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             }
         },
     );
+    */
 
     // documentation on what exactly this does is sparse but it
     // seems to block until the maps have been read meaning we
     // can read from them multiple times safely
-    gw.device().poll(true);
+    dbg!("asdfasdfasdf");
 }

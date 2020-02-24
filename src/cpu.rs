@@ -7,7 +7,7 @@ use ndarray::Zip;
 use rayon::prelude::*;
 
 use super::izhikevich;
-use super::izhikevich::{Izhikevich, thalamic_input};
+use super::izhikevich::{thalamic_input, Izhikevich};
 
 /// Currently this is meant to closely replicate the example Matlab code from the paper though
 /// written in a more object oriented style rather than array oriented to be closer to a
