@@ -289,10 +289,12 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     let graph_file = graph_file.to_owned();
 
+    // this seems to work on Mac just fine but Windows will stall sometimes
     dbg!("waiting on final data");
     dbg!(spike_buffer.size);
     if let Ok(mapping) = block_on(spike_buffer.staging.map_read(0, spike_buffer.size)) {
         dbg!("got final data");
+
         let raw: Vec<u32> = mapping
             .as_slice()
             .chunks_exact(4)
@@ -310,6 +312,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             time_steps,
         );
     }
+    dbg!("finished");
 
     /*
     spike_buffer.staging.map_read_async(
@@ -331,9 +334,4 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         },
     );
     */
-
-    // documentation on what exactly this does is sparse but it
-    // seems to block until the maps have been read meaning we
-    // can read from them multiple times safely
-    dbg!("asdfasdfasdf");
 }
