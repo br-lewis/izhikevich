@@ -254,6 +254,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
+    /*
     encoder.copy_buffer_to_buffer(
         &neuron_buffer.storage,
         0,
@@ -261,6 +262,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         0,
         neuron_buffer.size,
     );
+    */
     encoder.copy_buffer_to_buffer(
         &spike_buffer.storage,
         0,
@@ -270,22 +272,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     );
 
     gw.queue().submit(&[encoder.finish()]);
-
-    /*
-    neuron_buffer.staging.map_read_async(
-        0,
-        neuron_buffer.size,
-        |result: wgpu::BufferMapAsyncResult<&[Izhikevich]>| {
-            if let Ok(_mapping) = result {
-                /*
-                for neuron in mapping.data {
-                    println!("{:?}", neuron.state());
-                }
-                */
-            }
-        },
-    );
-    */
 
     let graph_file = graph_file.to_owned();
 
@@ -313,25 +299,4 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         );
     }
     dbg!("finished");
-
-    /*
-    spike_buffer.staging.map_read_async(
-        0,
-        spike_buffer.size,
-        move |result: wgpu::BufferMapAsyncResult<&[u32]>| {
-            if let Ok(mapping) = result {
-                let spikes_per_time: Array2<u32> =
-                    Array::from_shape_vec((neurons.len(), time_steps), mapping.data.to_vec())
-                        .unwrap();
-                super::cpu::graph_output(
-                    &graph_file,
-                    &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
-                    &Array::from_iter((0..time_steps).map(|_| 0.0)),
-                    &neurons,
-                    time_steps,
-                );
-            }
-        },
-    );
-    */
 }
