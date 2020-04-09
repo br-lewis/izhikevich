@@ -25,7 +25,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
 
-    let mut gw = GpuWrapper::new();
+    let mut gw = block_on(GpuWrapper::new());
 
     let neuron_buffer = gw.create_buffer(neurons.as_slice().unwrap());
     // this will be created with more permissions than it needs since it's readonly right now
@@ -47,6 +47,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
 
     let config_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
+        label: Some("config storage"),
         size: config_buffer_size,
         usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
     });
@@ -63,6 +64,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     );
 
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
+        label: Some("thalamic storage"),
         size: thalamic_buffer_size,
         usage: wgpu::BufferUsage::STORAGE
             | wgpu::BufferUsage::COPY_DST
@@ -72,13 +74,14 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let bind_group_layout =
         gw.device()
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
                 bindings: &[
-                    wgpu::BindGroupLayoutBinding {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                     },
-                    wgpu::BindGroupLayoutBinding {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::StorageBuffer {
@@ -86,7 +89,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                             readonly: false,
                         },
                     },
-                    wgpu::BindGroupLayoutBinding {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::StorageBuffer {
@@ -94,7 +97,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                             readonly: false,
                         },
                     },
-                    wgpu::BindGroupLayoutBinding {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::StorageBuffer {
@@ -102,7 +105,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
                             readonly: false,
                         },
                     },
-                    wgpu::BindGroupLayoutBinding {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 4,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::StorageBuffer {
@@ -114,6 +117,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             });
 
     let bind_group = gw.device().create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
         layout: &bind_group_layout,
         bindings: &[
             wgpu::Binding {
@@ -163,7 +167,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     let mut encoder = gw
         .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("init data entry") });
 
     encoder.copy_buffer_to_buffer(
         &neuron_buffer.staging,
@@ -214,7 +218,9 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
         let mut encoder = gw
             .device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some(&format!("time step {}", t)),
+            });
 
         let config_staging_buffer = gw
             .device()
@@ -252,7 +258,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     }
     let mut encoder = gw
         .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("final data extract") });
 
     /*
     encoder.copy_buffer_to_buffer(

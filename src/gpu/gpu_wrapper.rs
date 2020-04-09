@@ -9,19 +9,25 @@ pub struct GpuWrapper {
 }
 
 impl GpuWrapper {
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let adapter = wgpu::Adapter::request(
-            &wgpu::RequestAdapterOptions::default(),
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: None,
+            },
             wgpu::BackendBit::PRIMARY,
         )
+        .await
         .expect("error creating adapter");
 
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
-            },
-            limits: wgpu::Limits::default(),
-        });
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                extensions: wgpu::Extensions {
+                    anisotropic_filtering: false,
+                },
+                limits: wgpu::Limits::default(),
+            })
+            .await;
 
         let cs_module = device.create_shader_module(&Self::izhikevich_shader());
 
@@ -41,7 +47,8 @@ impl GpuWrapper {
         let size = (data.len() * mem::size_of::<T>()) as wgpu::BufferAddress;
 
         let storage_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
-            size: size,
+            label: None,
+            size,
             usage: wgpu::BufferUsage::STORAGE
                 | wgpu::BufferUsage::COPY_DST
                 | wgpu::BufferUsage::COPY_SRC,
@@ -50,7 +57,7 @@ impl GpuWrapper {
         BufferWrapper {
             staging: staging_buffer,
             storage: storage_buffer,
-            size: size,
+            size,
         }
     }
 
