@@ -282,9 +282,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let graph_file = graph_file.to_owned();
 
     // this seems to work on Mac just fine but Windows will stall sometimes in release mode
-    dbg!("waiting on final data");
-    dbg!(spike_buffer.size);
-
+    dbg!("executing map read");
     let spike_future = spike_buffer.staging.map_read(0, spike_buffer.size);
 
     // Poll the device in a blocking manner so that our future resolves.
@@ -292,6 +290,8 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     // be called in an event loop or on another thread.
     gw.device().poll(wgpu::Maintain::Wait);
 
+    dbg!("waiting on map read to finish");
+    dbg!(spike_buffer.size);
     if let Ok(mapping) = block_on(spike_future) {
         dbg!("got final data");
 
@@ -312,5 +312,4 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             time_steps,
         );
     }
-    dbg!("finished");
 }
