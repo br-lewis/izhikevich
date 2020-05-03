@@ -25,7 +25,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
 
-    let mut gw = block_on(GpuWrapper::new());
+    let mut gw: GpuWrapper = block_on(GpuWrapper::new());
 
     let neuron_buffer = gw.create_buffer(neurons.as_slice().unwrap());
     // this will be created with more permissions than it needs since it's readonly right now
@@ -281,10 +281,18 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     let graph_file = graph_file.to_owned();
 
-    // this seems to work on Mac just fine but Windows will stall sometimes
+    // this seems to work on Mac just fine but Windows will stall sometimes in release mode
     dbg!("waiting on final data");
     dbg!(spike_buffer.size);
-    if let Ok(mapping) = block_on(spike_buffer.staging.map_read(0, spike_buffer.size)) {
+
+    let spike_future = spike_buffer.staging.map_read(0, spike_buffer.size);
+
+    // Poll the device in a blocking manner so that our future resolves.
+    // In an actual application, `device.poll(...)` should
+    // be called in an event loop or on another thread.
+    gw.device().poll(wgpu::Maintain::Wait);
+
+    if let Ok(mapping) = block_on(spike_future) {
         dbg!("got final data");
 
         let raw: Vec<u32> = mapping
