@@ -20,14 +20,14 @@ used up computer-breaking amounts of RAM so I had to use the
 
 ## Running ##
 
-Default is running on the CPU
+Default is running on the GPU
 ```
 cargo run -- 1000
 ```
 
-To use a GPU:
+To use the CPU:
 ```
-cargo run -- --comp-type gpu 1000
+cargo run -- --cpu 1000
 ```
 
 The resulting graph defaults to `./out.png` but can be changed. The output
