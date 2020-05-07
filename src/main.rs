@@ -1,17 +1,8 @@
-use clap::arg_enum;
 use structopt::StructOpt;
 
 mod cpu;
 mod gpu;
 mod izhikevich;
-
-arg_enum! {
-    #[derive(Debug)]
-    enum ComputationType {
-        Cpu,
-        Gpu,
-    }
-}
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "izhikevich")]
@@ -20,12 +11,8 @@ struct Args {
     #[structopt(default_value = "1")]
     steps: usize,
 
-    /// whether to use the CPU or GPU for neuron timestep computation
-    #[structopt(long = "comp-type",
-        possible_values = &ComputationType::variants(),
-        case_insensitive = true,
-        default_value = "cpu")]
-    comp_type: ComputationType,
+    #[structopt(long = "cpu")]
+    use_cpu: bool,
 
     /// number of excitatory neurons to create
     #[structopt(long = "ne", default_value = "800")]
@@ -47,18 +34,19 @@ fn main() {
 
     log::info!("{:?}", args);
 
-    match args.comp_type {
-        ComputationType::Cpu => cpu::main(
+    if args.use_cpu {
+        cpu::main(
             args.steps,
             args.num_excitatory,
             args.num_inhibitory,
             &args.graph_file,
-        ),
-        ComputationType::Gpu => gpu::main(
+        );
+    } else {
+        gpu::main(
             args.steps,
             args.num_excitatory,
             args.num_inhibitory,
             &args.graph_file,
-        ),
+        );
     }
 }
