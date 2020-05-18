@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 
 use futures::executor::block_on;
 use ndarray::prelude::*;
-use zerocopy::{FromBytes, AsBytes};
+use zerocopy::AsBytes;
 
 use super::izhikevich;
 //use super::izhikevich::Izhikevich;
