@@ -1,9 +1,7 @@
-use gnuplot::AxesCommon;
-use gnuplot::Figure;
-use gnuplot::Fix;
-use gnuplot::PlotOption;
 use ndarray::prelude::*;
 use ndarray::Zip;
+use plotters::prelude::*;
+
 use rayon::prelude::*;
 
 use super::izhikevich;
@@ -58,36 +56,43 @@ pub fn graph_output(
     neurons: &Array1<izhikevich::Izhikevich>,
     time_steps: usize,
 ) {
-    let mut spike_times = vec![];
     let mut spike_points = vec![];
     for t in 0..time_steps {
         let spikes_at = spikes.column(t);
         for i in spike_indices(&spikes_at).iter() {
-            spike_times.push(t);
-            // copy out usize to prevent temp value dropped error
-            spike_points.push(*i);
+            spike_points.push((t as f32, *i as f32));
         }
     }
 
-    let mut fig = Figure::new();
-    fig.axes2d()
-        .set_pos(0.0, 0.2)
-        .set_size(1.0, 0.8)
-        .set_x_range(Fix(0.0), Fix(time_steps as f64))
-        .set_y_range(Fix(0.0), Fix(neurons.len() as f64))
-        .points(
-            &spike_times,
-            &spike_points,
-            &[PlotOption::PointSymbol('O'), PlotOption::PointSize(0.6)],
-        );
-    fig.axes2d()
-        .set_pos(0.0, 0.0)
-        .set_size(1.0, 0.2)
-        .set_x_range(Fix(0.0), Fix(time_steps as f64))
-        .set_y_range(Fix(-100.0), Fix(30.0))
-        .lines(0..time_steps, voltages.iter(), &[]);
-    fig.save_to_png(graph_file, 1200, 1400)
-        .expect("error writing graph to file");
+    let root = BitMapBackend::new(graph_file, (1200, 1400)).into_drawing_area();
+    root.fill(&WHITE).unwrap();
+    let (upper, lower) = root.split_vertically(1000);
+
+    let mut spike_chart = ChartBuilder::on(&upper)
+        .build_ranged(0f32..time_steps as f32, 0f32..neurons.len() as f32).unwrap();
+    
+    spike_chart.configure_mesh().draw().unwrap();
+    spike_chart.draw_series(PointSeries::of_element(spike_points.into_iter(),
+        2,
+        &RED,
+        &|c, s, t| {
+            return EmptyElement::at(c)
+                + Circle::new((0,0), s, t.filled());
+        }
+    )).unwrap();
+
+
+    let mut neuron_chart = ChartBuilder::on(&lower)
+        .build_ranged(0f32..time_steps as f32, -100f32..30f32).unwrap();
+
+    neuron_chart.configure_mesh().draw().unwrap();
+    neuron_chart.draw_series(
+        LineSeries::new(
+            voltages.into_iter().enumerate().map(|(i, v)| (i as f32, *v)),
+            &RED,
+        )
+    ).unwrap();
+
 }
 
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {

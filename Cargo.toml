@@ -19,7 +19,7 @@ clap = "2.33.0"
 rayon = "1.1"
 futures = "0.3"
 ndarray = {version = "0.13.0", features = ["rayon"]}
-gnuplot = "0.0.34"
+plotters = "0.2"
 
 [build-dependencies]
 shaderc = "0.6"
