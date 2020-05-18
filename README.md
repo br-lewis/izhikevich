@@ -7,10 +7,6 @@ and in compute shaders on the GPU using
 Right now this is just a replication of the example code in the paper and is
 mostly an excuse for trying out compute shaders and GPU programming.
 
-## Dependencies ##
-
-This requires `gnuplot` be available in the `PATH` when plotting output.
-
 ## Building ##
 
 Should Just Work™ but I found on Windows, compiling `shaderc` from source
@@ -30,9 +26,7 @@ To use the CPU:
 cargo run -- --cpu 1000
 ```
 
-The resulting graph defaults to `./out.png` but can be changed. The output
-when running on the GPU does not have voltage data from the first neuron unlike
-the CPU because currently it doesn't track historical neuron state.
+The resulting graph defaults to `./out.png` but can be changed.
 
 Increasing the number of neurons increases RAM usage exponentially due to the
 dense connection matrix.
