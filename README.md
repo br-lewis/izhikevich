@@ -1,11 +1,18 @@
 
 Implementation of [Izhikevich spiking
-neurons](https://www.izhikevich.org/publications/spikes.pdf) running on the CPU
+neurons][Izhi-2003] running on the CPU
 and in compute shaders on the GPU using
-[`wgpu-rs`](https://github.com/gfx-rs/wgpu-rs).
+[`wgpu-rs`](https://github.com/gfx-rs/wgpu-rs). Mostly an excuse for trying
+out compute shaders and GPU programming.
 
-Right now this is just a replication of the example code in the paper and is
-mostly an excuse for trying out compute shaders and GPU programming.
+## Milestones ##
+
+### 0.2 ###
+Replicate the setup from 0.1 but make it run and graph continuously.
+
+### 0.1 ###
+A replication of the example code in the [the paper][Izhi-2003] that produces
+a similar graph output.
 
 ## Building ##
 
@@ -30,3 +37,5 @@ The resulting graph defaults to `./out.png` but can be changed.
 
 Increasing the number of neurons increases RAM usage exponentially due to the
 dense connection matrix.
+
+[Izhi-2003]: https://www.izhikevich.org/publications/spikes.pdf
