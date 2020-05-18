@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 
 use futures::executor::block_on;
 use ndarray::prelude::*;
-use zerocopy::AsBytes;
+use zerocopy::{FromBytes, AsBytes};
 
 use super::izhikevich;
 //use super::izhikevich::Izhikevich;
@@ -167,7 +167,9 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
 
     let mut encoder = gw
         .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("init data entry") });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("init data entry"),
+        });
 
     encoder.copy_buffer_to_buffer(
         &neuron_buffer.staging,
@@ -206,6 +208,8 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     );
 
     gw.queue().submit(&[encoder.finish()]);
+
+    let mut voltages: Vec<f32> = Vec::with_capacity(time_steps);
 
     for t in 0..time_steps {
         let config = Config {
@@ -254,21 +258,40 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
             cpass.dispatch(neurons.len() as u32, 1, 1);
         }
 
+        encoder.copy_buffer_to_buffer(
+            &neuron_buffer.storage,
+            0,
+            &neuron_buffer.staging,
+            0,
+            std::mem::size_of::<izhikevich::Izhikevich>() as wgpu::BufferAddress,
+        );
+
         gw.queue().submit(&[encoder.finish()]);
+
+        //read first neuron voltage
+
+        let neuron_future = neuron_buffer.staging.map_read(
+            0,
+            std::mem::size_of::<izhikevich::Izhikevich>() as wgpu::BufferAddress,
+        );
+        gw.device().poll(wgpu::Maintain::Wait);
+
+        if let Ok(mapping) = block_on(neuron_future) {
+            let raw: Vec<f32> = mapping
+                .as_slice()
+                .chunks_exact(4)
+                .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+                .collect();
+            //println!("{} {}", raw.len(), raw[4]);
+            voltages.push(raw[4]);
+        }
     }
     let mut encoder = gw
         .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("final data extract") });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("final data extract"),
+        });
 
-    /*
-    encoder.copy_buffer_to_buffer(
-        &neuron_buffer.storage,
-        0,
-        &neuron_buffer.staging,
-        0,
-        neuron_buffer.size,
-    );
-    */
     encoder.copy_buffer_to_buffer(
         &spike_buffer.storage,
         0,
@@ -282,7 +305,6 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     let graph_file = graph_file.to_owned();
 
     // this seems to work on Mac just fine but Windows will stall sometimes in release mode
-    dbg!("executing map read");
     let spike_future = spike_buffer.staging.map_read(0, spike_buffer.size);
 
     // Poll the device in a blocking manner so that our future resolves.
@@ -290,10 +312,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     // be called in an event loop or on another thread.
     gw.device().poll(wgpu::Maintain::Wait);
 
-    dbg!("waiting on map read to finish");
-    dbg!(spike_buffer.size);
     if let Ok(mapping) = block_on(spike_future) {
-        dbg!("got final data");
 
         let raw: Vec<u32> = mapping
             .as_slice()
@@ -307,7 +326,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         super::cpu::graph_output(
             &graph_file,
             &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
-            &Array::from_iter((0..time_steps).map(|_| 0.0)),
+            &Array::from_iter(voltages.into_iter()),
             &neurons,
             time_steps,
         );
