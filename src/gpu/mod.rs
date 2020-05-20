@@ -1,7 +1,6 @@
 use std::convert::TryInto;
 use std::iter::FromIterator;
 
-use futures::executor::block_on;
 use ndarray::prelude::*;
 use zerocopy::AsBytes;
 
@@ -20,12 +19,12 @@ struct Config {
     time_step: u32,
 }
 
-pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
+pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
 
-    let mut gw: GpuWrapper = block_on(GpuWrapper::new());
+    let mut gw: GpuWrapper = GpuWrapper::new().await;
 
     let neuron_buffer = gw.create_buffer(neurons.as_slice().unwrap());
     // this will be created with more permissions than it needs since it's readonly right now
@@ -276,7 +275,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         );
         gw.device().poll(wgpu::Maintain::Wait);
 
-        if let Ok(mapping) = block_on(neuron_future) {
+        if let Ok(mapping) = neuron_future.await {
             let raw: Vec<f32> = mapping
                 .as_slice()
                 .chunks_exact(4)
@@ -312,7 +311,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
     // be called in an event loop or on another thread.
     gw.device().poll(wgpu::Maintain::Wait);
 
-    if let Ok(mapping) = block_on(spike_future) {
+    if let Ok(mapping) = spike_future.await {
 
         let raw: Vec<u32> = mapping
             .as_slice()

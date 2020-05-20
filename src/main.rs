@@ -27,7 +27,8 @@ struct Args {
     graph_file: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init();
 
     let args = Args::from_args();
@@ -47,6 +48,6 @@ fn main() {
             args.num_excitatory,
             args.num_inhibitory,
             &args.graph_file,
-        );
+        ).await;
     }
 }
