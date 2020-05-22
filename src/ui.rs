@@ -2,11 +2,15 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use plotters::prelude::*;
 use piston_window::{EventLoop, PistonWindow, WindowSettings};
+use plotters::prelude::*;
 
-pub(crate) fn draw(time_steps: usize, neuron_count: usize, voltages: Arc<Mutex<VecDeque<f32>>>) {
-
+pub(crate) fn draw(
+    time_steps: usize,
+    neuron_count: usize,
+    voltages: Arc<Mutex<VecDeque<f32>>>,
+    spikes: Arc<Mutex<VecDeque<Vec<bool>>>>,
+) {
     let mut window: PistonWindow = WindowSettings::new("Izhikevich simulation", [1000, 1200])
         .samples(4)
         .build()
@@ -16,7 +20,6 @@ pub(crate) fn draw(time_steps: usize, neuron_count: usize, voltages: Arc<Mutex<V
 
     let voltage_reader: Arc<Mutex<VecDeque<f32>>> = Arc::clone(&voltages);
     while let Some(_event) = draw_piston_window(&mut window, |backend| {
-        let spike_points: Vec<(i32, i32)> = vec![];
 
         let root = backend.into_drawing_area();
         root.fill(&WHITE)?;
@@ -29,7 +32,7 @@ pub(crate) fn draw(time_steps: usize, neuron_count: usize, voltages: Arc<Mutex<V
 
         spike_chart.configure_mesh().draw()?;
         spike_chart.draw_series(PointSeries::of_element(
-            spike_points.into_iter(),
+            spike_points(&spikes),
             2,
             &RED,
             &|c, s, t| {
@@ -56,4 +59,19 @@ pub(crate) fn draw(time_steps: usize, neuron_count: usize, voltages: Arc<Mutex<V
     }) {
         //println!("{:?}", event);
     }
+}
+
+fn spike_points(spikes: &Arc<Mutex<VecDeque<Vec<bool>>>>) -> Vec<(i32, i32)> {
+    let guard = spikes.lock().unwrap();
+    guard
+        .iter()
+        .enumerate()
+        .flat_map(|(time_step, spikes)| {
+            spikes
+                .iter()
+                .enumerate()
+                .filter(|(_n, &s)| s)
+                .map(move |(n, _s)| (time_step as i32, n as i32))
+        })
+        .collect()
 }

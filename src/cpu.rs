@@ -12,7 +12,13 @@ use super::izhikevich::{thalamic_input, Izhikevich};
 /// Currently this is meant to closely replicate the example Matlab code from the paper though
 /// written in a more object oriented style rather than array oriented to be closer to a
 /// theoretically more GPU-friendly style
-pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, voltage_channel: mpsc::Sender<f32>) {
+pub(crate) fn main(
+    time_steps: usize,
+    excitatory: usize,
+    inhibitory: usize,
+    voltage_channel: mpsc::Sender<f32>,
+    spike_channel: mpsc::Sender<Vec<bool>>,
+) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
@@ -33,7 +39,7 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, volt
         let input = thalamic_input(excitatory, inhibitory) + ci;
 
         let mut new_neurons: Vec<Izhikevich> = Vec::with_capacity(neurons.len());
-        let mut current_spikes: Vec<bool> = Vec::with_capacity(neurons.len());
+        let mut current_spikes_buf: Vec<bool> = Vec::with_capacity(neurons.len());
 
         (0..neurons.len())
             .into_par_iter()
@@ -44,20 +50,28 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, volt
                 let s = neuron.compute_step(input);
                 (neuron, s)
             })
-            .unzip_into_vecs(&mut new_neurons, &mut current_spikes);
+            .unzip_into_vecs(&mut new_neurons, &mut current_spikes_buf);
 
-        let current_spikes = Array::from(current_spikes);
+        let current_spikes = Array::from(current_spikes_buf);
         neurons.assign(&Array::from(new_neurons));
 
         let v = neurons[0].v;
         voltages[t] = v;
+        spikes.column_mut(t).assign(&current_spikes);
+
         let mut vc = voltage_channel.clone();
         tokio::spawn(async move {
             if let Err(_) = vc.send(v).await {
                 println!("sending voltage failed");
             }
         });
-        spikes.column_mut(t).assign(&current_spikes);
+
+        let mut sc = spike_channel.clone();
+        tokio::spawn(async move {
+            if let Err(_) = sc.send(current_spikes.to_vec()).await {
+                println!("sending spikes failed");
+            }
+        });
 
         t = wrapping_inc(t, time_steps);
         let elapsed = timer.elapsed();
@@ -160,7 +174,6 @@ fn spike_indices(arr: &ArrayView1<bool>) -> Array1<usize> {
         })
         .collect()
 }
-
 
 fn wrapping_inc(t: usize, max: usize) -> usize {
     if t == max - 1 {

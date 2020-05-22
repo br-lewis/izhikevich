@@ -1,10 +1,9 @@
 use std::convert::TryInto;
-use std::iter::FromIterator;
 use std::time;
 
 use ndarray::prelude::*;
-use zerocopy::AsBytes;
 use tokio::sync::mpsc;
+use zerocopy::AsBytes;
 
 use super::izhikevich;
 //use super::izhikevich::Izhikevich;
@@ -21,7 +20,13 @@ struct Config {
     time_step: u32,
 }
 
-pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str, voltage_channel: mpsc::Sender<f32>) {
+pub(crate) async fn main(
+    time_steps: usize,
+    excitatory: usize,
+    inhibitory: usize,
+    voltage_channel: mpsc::Sender<f32>,
+    spike_channel: mpsc::Sender<Vec<bool>>,
+) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
@@ -271,6 +276,14 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
             std::mem::size_of::<izhikevich::Izhikevich>() as wgpu::BufferAddress,
         );
 
+        encoder.copy_buffer_to_buffer(
+            &spike_buffer.storage,
+            (t * neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
+            &spike_buffer.staging,
+            (t * neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
+            (neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
+        );
+
         gw.queue().submit(&[encoder.finish()]);
 
         //read first neuron voltage
@@ -278,6 +291,10 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
         let neuron_future = neuron_buffer.staging.map_read(
             0,
             std::mem::size_of::<izhikevich::Izhikevich>() as wgpu::BufferAddress,
+        );
+        let spike_future = spike_buffer.staging.map_read(
+            (t * neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
+            (neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
         );
         gw.device().poll(wgpu::Maintain::Wait);
 
@@ -295,6 +312,22 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
             //tokio::spawn(async move {
                 if let Err(_) = vc.send(v).await {
                     println!("sending voltage failed");
+                }
+            //});
+        }
+
+        if let Ok(mapping) = spike_future.await {
+            let spikes: Vec<bool> = mapping
+                .as_slice()
+                .chunks_exact(4)
+                .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+                .map(|v| if v > 0 { true } else { false })
+                .collect();
+
+            let mut sc = spike_channel.clone();
+            //tokio::spawn(async move {
+                if let Err(_) = sc.send(spikes).await {
+                    println!("sending spikes failed");
                 }
             //});
         }

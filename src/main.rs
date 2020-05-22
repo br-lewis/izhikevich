@@ -44,10 +44,10 @@ fn main() {
     let args: Args = Args::from_args();
     log::info!("{:?}", args);
 
-    let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(100);
-
     let time_steps = args.steps;
     let total_neurons = args.num_excitatory + args.num_inhibitory;
+
+    let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(100);
 
     let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
     let voltage_pusher = Arc::clone(&voltages);
@@ -63,6 +63,22 @@ fn main() {
         }
     });
 
+    let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) = mpsc::channel(100);
+
+    let spikes = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
+    let spike_pusher = Arc::clone(&spikes);
+    runtime.spawn(async move {
+        while let Some(s) = spikes_rx.recv().await {
+            let mut guard = spike_pusher.lock().unwrap();
+            if guard.len() < time_steps {
+                guard.push_back(s);
+            } else {
+                guard.pop_front();
+                guard.push_back(s);
+            }
+        }
+    });
+
     if args.use_cpu {
         let runner_args = args.clone();
         runtime.spawn(async move {
@@ -72,6 +88,7 @@ fn main() {
                 args.num_excitatory,
                 args.num_inhibitory,
                 voltage_tx,
+                spikes_tx,
             );
         });
     } else {
@@ -82,11 +99,11 @@ fn main() {
                 args.steps,
                 args.num_excitatory,
                 args.num_inhibitory,
-                &args.graph_file,
                 voltage_tx,
+                spikes_tx,
             ));
         });
     }
 
-    ui::draw(time_steps, total_neurons, voltages);
+    ui::draw(time_steps, total_neurons, voltages, spikes);
 }
