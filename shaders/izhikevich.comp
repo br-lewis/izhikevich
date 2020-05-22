@@ -81,10 +81,19 @@ uint izhikevich_step(inout Neuron n, float i) {
     return spike;
 }
 
+uint wrapping_dec(uint t, uint max) {
+    if (t == 0) {
+        return max - 1;
+    } else {
+        return t - 1;
+    }
+}
+
 void main() {
     uint i = gl_GlobalInvocationID.x;
 
-    float connection_input = connection_input(i, time_step-1);
+    uint prev_time = wrapping_dec(time_step, total_time_steps);
+    float connection_input = connection_input(i, prev_time);
     float thalamic_input = thalamic[i];
 
     uint spike_index = flatten_index(total_time_steps, i, time_step);

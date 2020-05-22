@@ -19,7 +19,8 @@ clap = "2.33.0"
 rayon = "1.1"
 tokio = { version = "0.2", features = ["full"] }
 ndarray = {version = "0.13.0", features = ["rayon"]}
-plotters = "0.2"
+plotters = { version = "0.2", features = ["piston", "line_series", "point_series"] }
+piston_window = "0.108"
 
 [build-dependencies]
 shaderc = "0.6"

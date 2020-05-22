@@ -1,14 +1,21 @@
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
+
 use structopt::StructOpt;
+use tokio::sync::mpsc;
 
 mod cpu;
 mod gpu;
 mod izhikevich;
+mod ui;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(name = "izhikevich")]
 struct Args {
-    /// how many timesteps to simulate (each step is equivalent to 1ms)
-    #[structopt(default_value = "1")]
+    /// how many timesteps to hold in the buffer (each step is equivalent to 1ms)
+    #[structopt(default_value = "1000")]
     steps: usize,
 
     #[structopt(long = "cpu")]
@@ -27,27 +34,59 @@ struct Args {
     graph_file: String,
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     env_logger::init();
+    let mut runtime = tokio::runtime::Builder::new()
+        .threaded_scheduler()
+        .build()
+        .unwrap();
 
-    let args = Args::from_args();
-
+    let args: Args = Args::from_args();
     log::info!("{:?}", args);
 
+    let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(100);
+
+    let time_steps = args.steps;
+    let total_neurons = args.num_excitatory + args.num_inhibitory;
+
+    let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
+    let voltage_pusher = Arc::clone(&voltages);
+    runtime.spawn(async move {
+        while let Some(v) = voltage_rx.recv().await {
+            let mut guard = voltage_pusher.lock().unwrap();
+            if guard.len() < time_steps {
+                guard.push_back(v)
+            } else {
+                guard.pop_front();
+                guard.push_back(v);
+            }
+        }
+    });
+
     if args.use_cpu {
-        cpu::main(
-            args.steps,
-            args.num_excitatory,
-            args.num_inhibitory,
-            &args.graph_file,
-        );
+        let runner_args = args.clone();
+        runtime.spawn(async move {
+            let args = runner_args;
+            cpu::main(
+                args.steps,
+                args.num_excitatory,
+                args.num_inhibitory,
+                voltage_tx,
+            );
+        });
     } else {
-        gpu::main(
-            args.steps,
-            args.num_excitatory,
-            args.num_inhibitory,
-            &args.graph_file,
-        ).await;
+        let runner_args = args.clone();
+        thread::spawn(move || {
+            let args = runner_args;
+            runtime.block_on(gpu::main(
+                args.steps,
+                args.num_excitatory,
+                args.num_inhibitory,
+                &args.graph_file,
+                voltage_tx,
+            ));
+        });
     }
+
+    ui::draw(time_steps, total_neurons, voltages);
 }

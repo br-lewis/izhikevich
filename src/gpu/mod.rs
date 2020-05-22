@@ -1,8 +1,10 @@
 use std::convert::TryInto;
 use std::iter::FromIterator;
+use std::time;
 
 use ndarray::prelude::*;
 use zerocopy::AsBytes;
+use tokio::sync::mpsc;
 
 use super::izhikevich;
 //use super::izhikevich::Izhikevich;
@@ -19,7 +21,7 @@ struct Config {
     time_step: u32,
 }
 
-pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
+pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str, voltage_channel: mpsc::Sender<f32>) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
     let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
@@ -210,7 +212,11 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
 
     let mut voltages: Vec<f32> = Vec::with_capacity(time_steps);
 
-    for t in 0..time_steps {
+    let mut t: usize = 0;
+    //for t in 0..time_steps {
+    loop {
+        let timer = time::Instant::now();
+
         let config = Config {
             neurons: neurons.len() as u32,
             total_time_steps: time_steps as u32,
@@ -282,9 +288,26 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
                 .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
                 .collect();
             //println!("{} {}", raw.len(), raw[4]);
-            voltages.push(raw[4]);
+            let v = raw[4];
+            voltages.push(v);
+
+            let mut vc = voltage_channel.clone();
+            //tokio::spawn(async move {
+                if let Err(_) = vc.send(v).await {
+                    println!("sending voltage failed");
+                }
+            //});
         }
+
+        t = wrapping_inc(t, time_steps);
+
+        let elapsed = timer.elapsed();
+        tokio::spawn(async move {
+            println!("{:?}", elapsed);
+        });
     }
+    /*
+
     let mut encoder = gw
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -329,5 +352,14 @@ pub(crate) async fn main(time_steps: usize, excitatory: usize, inhibitory: usize
             &neurons,
             time_steps,
         );
+    }
+    */
+}
+
+fn wrapping_inc(t: usize, max: usize) -> usize {
+    if t == max - 1 {
+        0
+    } else {
+        t + 1
     }
 }

@@ -1,8 +1,10 @@
+use std::time;
+
 use ndarray::prelude::*;
 use ndarray::Zip;
 use plotters::prelude::*;
-
 use rayon::prelude::*;
+use tokio::sync::mpsc;
 
 use super::izhikevich;
 use super::izhikevich::{thalamic_input, Izhikevich};
@@ -10,18 +12,23 @@ use super::izhikevich::{thalamic_input, Izhikevich};
 /// Currently this is meant to closely replicate the example Matlab code from the paper though
 /// written in a more object oriented style rather than array oriented to be closer to a
 /// theoretically more GPU-friendly style
-pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, graph_file: &str) {
+pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, voltage_channel: mpsc::Sender<f32>) {
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
     let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
     let mut voltages = Array1::<f32>::zeros(time_steps);
 
-    for t in 0..time_steps {
+    let mut t: usize = 0;
+    //for t in 0..time_steps {
+    loop {
+        let timer = time::Instant::now();
+
         let ci = if t == 0 {
             Array1::<f32>::zeros(excitatory + inhibitory)
         } else {
-            connection_input(&spikes.column(t - 1), &connections)
+            let prev_column = wrapping_dec(t, time_steps);
+            connection_input(&spikes.column(prev_column), &connections)
         };
         let input = thalamic_input(excitatory, inhibitory) + ci;
 
@@ -42,11 +49,24 @@ pub(crate) fn main(time_steps: usize, excitatory: usize, inhibitory: usize, grap
         let current_spikes = Array::from(current_spikes);
         neurons.assign(&Array::from(new_neurons));
 
-        voltages[t] = neurons[0].v;
+        let v = neurons[0].v;
+        voltages[t] = v;
+        let mut vc = voltage_channel.clone();
+        tokio::spawn(async move {
+            if let Err(_) = vc.send(v).await {
+                println!("sending voltage failed");
+            }
+        });
         spikes.column_mut(t).assign(&current_spikes);
+
+        t = wrapping_inc(t, time_steps);
+        let elapsed = timer.elapsed();
+        tokio::spawn(async move {
+            println!("{:?}", elapsed);
+        });
     }
 
-    graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
+    //graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
 
 pub fn graph_output(
@@ -69,30 +89,35 @@ pub fn graph_output(
     let (upper, lower) = root.split_vertically(1000);
 
     let mut spike_chart = ChartBuilder::on(&upper)
-        .build_ranged(0f32..time_steps as f32, 0f32..neurons.len() as f32).unwrap();
-    
-    spike_chart.configure_mesh().draw().unwrap();
-    spike_chart.draw_series(PointSeries::of_element(spike_points.into_iter(),
-        2,
-        &RED,
-        &|c, s, t| {
-            return EmptyElement::at(c)
-                + Circle::new((0,0), s, t.filled());
-        }
-    )).unwrap();
+        .build_ranged(0f32..time_steps as f32, 0f32..neurons.len() as f32)
+        .unwrap();
 
+    spike_chart.configure_mesh().draw().unwrap();
+    spike_chart
+        .draw_series(PointSeries::of_element(
+            spike_points.into_iter(),
+            2,
+            &RED,
+            &|c, s, t| {
+                return EmptyElement::at(c) + Circle::new((0, 0), s, t.filled());
+            },
+        ))
+        .unwrap();
 
     let mut neuron_chart = ChartBuilder::on(&lower)
-        .build_ranged(0f32..time_steps as f32, -100f32..30f32).unwrap();
+        .build_ranged(0f32..time_steps as f32, -100f32..30f32)
+        .unwrap();
 
     neuron_chart.configure_mesh().draw().unwrap();
-    neuron_chart.draw_series(
-        LineSeries::new(
-            voltages.into_iter().enumerate().map(|(i, v)| (i as f32, *v)),
+    neuron_chart
+        .draw_series(LineSeries::new(
+            voltages
+                .into_iter()
+                .enumerate()
+                .map(|(i, v)| (i as f32, *v)),
             &RED,
-        )
-    ).unwrap();
-
+        ))
+        .unwrap();
 }
 
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {
@@ -134,4 +159,21 @@ fn spike_indices(arr: &ArrayView1<bool>) -> Array1<usize> {
             false => None,
         })
         .collect()
+}
+
+
+fn wrapping_inc(t: usize, max: usize) -> usize {
+    if t == max - 1 {
+        0
+    } else {
+        t + 1
+    }
+}
+
+fn wrapping_dec(t: usize, max: usize) -> usize {
+    if t == 1 {
+        max - 1
+    } else {
+        t - 1
+    }
 }
