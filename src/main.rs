@@ -29,15 +29,17 @@ struct Args {
     #[structopt(long = "ni", default_value = "200")]
     num_inhibitory: usize,
 
-    /// path to output file that will be created/overwritten
-    #[structopt(long = "out", default_value = "out.png")]
-    graph_file: String,
+    /// drawing the spike data live is incredibly slow, set this true to only see
+    /// the voltage of neuron 0 over time
+    #[structopt(long = "no-spikes", aliases = &["no-spike"])]
+    no_spikes: bool,
 }
 
 fn main() {
     env_logger::init();
     let mut runtime = tokio::runtime::Builder::new()
         .threaded_scheduler()
+        .enable_time()
         .build()
         .unwrap();
 
@@ -47,7 +49,7 @@ fn main() {
     let time_steps = args.steps;
     let total_neurons = args.num_excitatory + args.num_inhibitory;
 
-    let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(100);
+    let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(1);
 
     let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
     let voltage_pusher = Arc::clone(&voltages);
@@ -63,18 +65,19 @@ fn main() {
         }
     });
 
-    let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) = mpsc::channel(100);
+    let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) = mpsc::channel(1);
 
     let spikes = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
     let spike_pusher = Arc::clone(&spikes);
     runtime.spawn(async move {
         while let Some(s) = spikes_rx.recv().await {
             let mut guard = spike_pusher.lock().unwrap();
+            let spike_indices = s.iter().enumerate().filter(|(_i, &s)| s).map(|(i, _s)| i as i32).collect();
             if guard.len() < time_steps {
-                guard.push_back(s);
+                guard.push_back(spike_indices);
             } else {
                 guard.pop_front();
-                guard.push_back(s);
+                guard.push_back(spike_indices);
             }
         }
     });
@@ -89,7 +92,7 @@ fn main() {
                 args.num_inhibitory,
                 voltage_tx,
                 spikes_tx,
-            );
+            ).await;
         });
     } else {
         let runner_args = args.clone();
@@ -105,5 +108,5 @@ fn main() {
         });
     }
 
-    ui::draw(time_steps, total_neurons, voltages, spikes);
+    ui::draw(time_steps, total_neurons, args.no_spikes, voltages, spikes);
 }

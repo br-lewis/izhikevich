@@ -10,6 +10,13 @@ out compute shaders and GPU programming.
 ### 0.2 ###
 Replicate the setup from 0.1 but make it run and graph continuously.
 
+Currently working but graphing the individual spikes is extremely slow. I
+think it's more due to using the graphing library in ways it wasn't meant to
+be used.
+
+The `no-spikes` flag will only draw neuron 0's voltage over time which is
+significantly faster.
+
 ### 0.1 ###
 A replication of the example code in the [the paper][Izhi-2003] that produces
 a similar graph output.

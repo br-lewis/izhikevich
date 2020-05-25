@@ -29,7 +29,8 @@ pub(crate) async fn main(
 ) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
-    let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
+    //let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
+    let spikes = Array2::<u32>::zeros((time_steps, neurons.len()));
 
     let mut gw: GpuWrapper = GpuWrapper::new().await;
 
@@ -218,8 +219,9 @@ pub(crate) async fn main(
     let mut voltages: Vec<f32> = Vec::with_capacity(time_steps);
 
     let mut t: usize = 0;
-    //for t in 0..time_steps {
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
     loop {
+        interval.tick().await;
         let timer = time::Instant::now();
 
         let config = Config {
