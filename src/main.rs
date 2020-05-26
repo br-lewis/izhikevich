@@ -46,17 +46,17 @@ fn main() {
     let args: Args = Args::from_args();
     log::info!("{:?}", args);
 
-    let time_steps = args.steps;
+    let step_buffer_size = args.steps;
     let total_neurons = args.num_excitatory + args.num_inhibitory;
 
     let (voltage_tx, mut voltage_rx): (mpsc::Sender<f32>, mpsc::Receiver<f32>) = mpsc::channel(1);
 
-    let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
+    let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(step_buffer_size)));
     let voltage_pusher = Arc::clone(&voltages);
     runtime.spawn(async move {
         while let Some(v) = voltage_rx.recv().await {
             let mut guard = voltage_pusher.lock().unwrap();
-            if guard.len() < time_steps {
+            if guard.len() < step_buffer_size {
                 guard.push_back(v)
             } else {
                 guard.pop_front();
@@ -65,15 +65,21 @@ fn main() {
         }
     });
 
-    let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) = mpsc::channel(1);
+    let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) =
+        mpsc::channel(1);
 
-    let spikes = Arc::new(Mutex::new(VecDeque::with_capacity(time_steps)));
+    let spikes = Arc::new(Mutex::new(VecDeque::with_capacity(step_buffer_size)));
     let spike_pusher = Arc::clone(&spikes);
     runtime.spawn(async move {
         while let Some(s) = spikes_rx.recv().await {
             let mut guard = spike_pusher.lock().unwrap();
-            let spike_indices = s.iter().enumerate().filter(|(_i, &s)| s).map(|(i, _s)| i as i32).collect();
-            if guard.len() < time_steps {
+            let spike_indices = s
+                .iter()
+                .enumerate()
+                .filter(|(_i, &s)| s)
+                .map(|(i, _s)| i as i32)
+                .collect();
+            if guard.len() < step_buffer_size {
                 guard.push_back(spike_indices);
             } else {
                 guard.pop_front();
@@ -92,7 +98,8 @@ fn main() {
                 args.num_inhibitory,
                 voltage_tx,
                 spikes_tx,
-            ).await;
+            )
+            .await;
         });
     } else {
         let runner_args = args.clone();
@@ -108,5 +115,11 @@ fn main() {
         });
     }
 
-    ui::draw(time_steps, total_neurons, args.no_spikes, voltages, spikes);
+    ui::draw(
+        step_buffer_size,
+        total_neurons,
+        args.no_spikes,
+        voltages,
+        spikes,
+    );
 }

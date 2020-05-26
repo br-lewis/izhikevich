@@ -12,7 +12,7 @@ use super::izhikevich::{thalamic_input, Izhikevich};
 /// written in a more object oriented style rather than array oriented to be closer to a
 /// theoretically more GPU-friendly style
 pub(crate) async fn main(
-    time_steps: usize,
+    time_buffer_size: usize,
     excitatory: usize,
     inhibitory: usize,
     voltage_channel: mpsc::Sender<f32>,
@@ -21,8 +21,8 @@ pub(crate) async fn main(
     let mut neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
 
-    let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_steps));
-    let mut voltages = Array1::<f32>::zeros(time_steps);
+    let mut spikes = Array2::<bool>::default((excitatory + inhibitory, time_buffer_size));
+    let mut voltages = Array1::<f32>::zeros(time_buffer_size);
 
     let mut t: usize = 0;
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
@@ -34,7 +34,7 @@ pub(crate) async fn main(
         let ci = if t == 0 {
             Array1::<f32>::zeros(excitatory + inhibitory)
         } else {
-            let prev_column = wrapping_dec(t, time_steps);
+            let prev_column = wrapping_dec(t, time_buffer_size);
             connection_input(&spikes.column(prev_column), &connections)
         };
         let input = thalamic_input(excitatory, inhibitory) + ci;
@@ -74,14 +74,13 @@ pub(crate) async fn main(
             }
         });
 
-        t = wrapping_inc(t, time_steps);
+        t = wrapping_inc(t, time_buffer_size);
         let elapsed = timer.elapsed();
         tokio::spawn(async move {
             println!("{:?}", elapsed);
         });
     }
 
-    //graph_output(graph_file, &spikes, &voltages, &neurons, time_steps);
 }
 
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {

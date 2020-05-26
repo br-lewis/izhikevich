@@ -21,7 +21,7 @@ struct Config {
 }
 
 pub(crate) async fn main(
-    time_steps: usize,
+    time_buffer_size: usize,
     excitatory: usize,
     inhibitory: usize,
     voltage_channel: mpsc::Sender<f32>,
@@ -29,8 +29,7 @@ pub(crate) async fn main(
 ) {
     let neurons = izhikevich::randomized_neurons(excitatory, inhibitory);
     let connections = izhikevich::randomized_connections(excitatory, inhibitory);
-    //let spikes = Array2::<u32>::zeros((neurons.len(), time_steps));
-    let spikes = Array2::<u32>::zeros((time_steps, neurons.len()));
+    let spikes = Array2::<u32>::zeros((time_buffer_size, neurons.len()));
 
     let mut gw: GpuWrapper = GpuWrapper::new().await;
 
@@ -42,7 +41,7 @@ pub(crate) async fn main(
     // TODO: try to generally clean up the rest of the buffer and bind group creation
     let config = Config {
         neurons: (excitatory + inhibitory) as u32,
-        total_time_steps: time_steps as u32,
+        total_time_steps: time_buffer_size as u32,
         time_step: 0,
     };
 
@@ -216,7 +215,7 @@ pub(crate) async fn main(
 
     gw.queue().submit(&[encoder.finish()]);
 
-    let mut voltages: Vec<f32> = Vec::with_capacity(time_steps);
+    let mut voltages: Vec<f32> = Vec::with_capacity(time_buffer_size);
 
     let mut t: usize = 0;
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
@@ -226,7 +225,7 @@ pub(crate) async fn main(
 
         let config = Config {
             neurons: neurons.len() as u32,
-            total_time_steps: time_steps as u32,
+            total_time_steps: time_buffer_size as u32,
             time_step: t as u32,
         };
 
@@ -306,16 +305,13 @@ pub(crate) async fn main(
                 .chunks_exact(4)
                 .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
                 .collect();
-            //println!("{} {}", raw.len(), raw[4]);
             let v = raw[4];
             voltages.push(v);
 
             let mut vc = voltage_channel.clone();
-            //tokio::spawn(async move {
-                if let Err(_) = vc.send(v).await {
-                    println!("sending voltage failed");
-                }
-            //});
+            if let Err(_) = vc.send(v).await {
+                println!("sending voltage failed");
+            }
         }
 
         if let Ok(mapping) = spike_future.await {
@@ -327,68 +323,18 @@ pub(crate) async fn main(
                 .collect();
 
             let mut sc = spike_channel.clone();
-            //tokio::spawn(async move {
-                if let Err(_) = sc.send(spikes).await {
-                    println!("sending spikes failed");
-                }
-            //});
+            if let Err(_) = sc.send(spikes).await {
+                println!("sending spikes failed");
+            }
         }
 
-        t = wrapping_inc(t, time_steps);
+        t = wrapping_inc(t, time_buffer_size);
 
         let elapsed = timer.elapsed();
         tokio::spawn(async move {
             println!("{:?}", elapsed);
         });
     }
-    /*
-
-    let mut encoder = gw
-        .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("final data extract"),
-        });
-
-    encoder.copy_buffer_to_buffer(
-        &spike_buffer.storage,
-        0,
-        &spike_buffer.staging,
-        0,
-        spike_buffer.size,
-    );
-
-    gw.queue().submit(&[encoder.finish()]);
-
-    let graph_file = graph_file.to_owned();
-
-    // this seems to work on Mac just fine but Windows will stall sometimes in release mode
-    let spike_future = spike_buffer.staging.map_read(0, spike_buffer.size);
-
-    // Poll the device in a blocking manner so that our future resolves.
-    // In an actual application, `device.poll(...)` should
-    // be called in an event loop or on another thread.
-    gw.device().poll(wgpu::Maintain::Wait);
-
-    if let Ok(mapping) = spike_future.await {
-
-        let raw: Vec<u32> = mapping
-            .as_slice()
-            .chunks_exact(4)
-            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .collect();
-
-        let spikes_per_time: Array2<u32> =
-            Array::from_shape_vec((neurons.len(), time_steps), raw).unwrap();
-
-        super::cpu::graph_output(
-            &graph_file,
-            &spikes_per_time.map(|&x| if x > 0 { true } else { false }),
-            &Array::from_iter(voltages.into_iter()),
-            &neurons,
-            time_steps,
-        );
-    }
-    */
 }
 
 fn wrapping_inc(t: usize, max: usize) -> usize {

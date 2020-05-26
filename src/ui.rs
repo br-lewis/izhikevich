@@ -6,7 +6,7 @@ use piston_window::{EventLoop, PistonWindow, WindowSettings};
 use plotters::prelude::*;
 
 pub(crate) fn draw(
-    time_steps: usize,
+    time_buffer_size: usize,
     neuron_count: usize,
     no_spikes: bool,
     voltages: Arc<Mutex<VecDeque<f32>>>,
@@ -21,7 +21,6 @@ pub(crate) fn draw(
 
     let voltage_reader: Arc<Mutex<VecDeque<f32>>> = Arc::clone(&voltages);
     while let Some(_event) = draw_piston_window(&mut window, |backend| {
-
         let root = backend.into_drawing_area();
         root.fill(&WHITE)?;
 
@@ -29,7 +28,7 @@ pub(crate) fn draw(
 
         let mut spike_chart = ChartBuilder::on(&upper)
             .caption("Spikes", ("sans-serif", 10))
-            .build_ranged(0..time_steps as i32, 0..neuron_count as i32)?;
+            .build_ranged(0..time_buffer_size as i32, 0..neuron_count as i32)?;
 
         if !no_spikes {
             let spike_guard = spikes.lock().unwrap();
@@ -49,7 +48,7 @@ pub(crate) fn draw(
 
         let mut neuron_chart = ChartBuilder::on(&lower)
             .caption("Neuron 0 voltage", ("sans-serif", 10))
-            .build_ranged(0..time_steps as i32, -100f32..30f32)?;
+            .build_ranged(0..time_buffer_size as i32, -100f32..30f32)?;
 
         neuron_chart.configure_mesh().draw()?;
         neuron_chart.draw_series(LineSeries::new(
