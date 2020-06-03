@@ -53,17 +53,6 @@ fn main() {
 
     let voltages = Arc::new(Mutex::new(VecDeque::with_capacity(step_buffer_size)));
     let voltage_pusher = Arc::clone(&voltages);
-    runtime.spawn(async move {
-        while let Some(v) = voltage_rx.recv().await {
-            let mut guard = voltage_pusher.lock().unwrap();
-            if guard.len() < step_buffer_size {
-                guard.push_back(v)
-            } else {
-                guard.pop_front();
-                guard.push_back(v);
-            }
-        }
-    });
 
     let (spikes_tx, mut spikes_rx): (mpsc::Sender<Vec<bool>>, mpsc::Receiver<Vec<bool>>) =
         mpsc::channel(1);
@@ -71,19 +60,28 @@ fn main() {
     let spikes = Arc::new(Mutex::new(VecDeque::with_capacity(step_buffer_size)));
     let spike_pusher = Arc::clone(&spikes);
     runtime.spawn(async move {
-        while let Some(s) = spikes_rx.recv().await {
-            let mut guard = spike_pusher.lock().unwrap();
+        // doing them both simultaneously keeps the spiking and voltage data matched up
+        while let (Some(v), Some(s)) = (voltage_rx.recv().await, spikes_rx.recv().await) {
+            let mut voltage_guard = voltage_pusher.lock().unwrap();
+            let mut spike_guard = spike_pusher.lock().unwrap();
+
+            if voltage_guard.len() < step_buffer_size {
+                voltage_guard.push_back(v)
+            } else {
+                voltage_guard.pop_front();
+                voltage_guard.push_back(v);
+            }
             let spike_indices = s
                 .iter()
                 .enumerate()
                 .filter(|(_i, &s)| s)
                 .map(|(i, _s)| i as i32)
                 .collect();
-            if guard.len() < step_buffer_size {
-                guard.push_back(spike_indices);
+            if spike_guard.len() < step_buffer_size {
+                spike_guard.push_back(spike_indices);
             } else {
-                guard.pop_front();
-                guard.push_back(spike_indices);
+                spike_guard.pop_front();
+                spike_guard.push_back(spike_indices);
             }
         }
     });
