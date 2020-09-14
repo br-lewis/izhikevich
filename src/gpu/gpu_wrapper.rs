@@ -1,5 +1,6 @@
 use std::mem;
 
+use wgpu::util::DeviceExt;
 use zerocopy::AsBytes;
 
 pub struct GpuWrapper {
@@ -10,26 +11,28 @@ pub struct GpuWrapper {
 
 impl GpuWrapper {
     pub async fn new() -> Self {
-        let adapter = wgpu::Adapter::request(
-            &wgpu::RequestAdapterOptions {
+        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let adapter: wgpu::Adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
-            },
-            wgpu::BackendBit::PRIMARY,
-        )
-        .await
-        .expect("error creating adapter");
+            })
+            .await
+            .expect("error creating adapter");
 
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions {
-                    anisotropic_filtering: false,
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    features: wgpu::Features::empty(),
+                    limits: wgpu::Limits::default(),
+                    shader_validation: true,
                 },
-                limits: wgpu::Limits::default(),
-            })
-            .await;
+                None,
+            )
+            .await
+            .expect("");
 
-        let cs_module = device.create_shader_module(&Self::izhikevich_shader());
+        let cs_module = device.create_shader_module(Self::izhikevich_shader());
 
         GpuWrapper {
             device,
@@ -39,20 +42,25 @@ impl GpuWrapper {
     }
 
     pub fn create_buffer<T: 'static + Copy + AsBytes>(&self, data: &[T]) -> BufferWrapper {
-        let staging_buffer = self.device().create_buffer_with_data(
-            data.as_bytes(),
-            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
-        );
-
         let size = (data.len() * mem::size_of::<T>()) as wgpu::BufferAddress;
 
-        let storage_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
-            label: None,
+        let staging_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
+            label: Some(""),
             size,
-            usage: wgpu::BufferUsage::STORAGE
-                | wgpu::BufferUsage::COPY_DST
-                | wgpu::BufferUsage::COPY_SRC,
+            usage: wgpu::BufferUsage::MAP_READ
+                | wgpu::BufferUsage::COPY_DST,
+            mapped_at_creation: false,
         });
+
+        let storage_buffer = self
+            .device()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(""),
+                contents: data.as_bytes(),
+                usage: wgpu::BufferUsage::STORAGE
+                    | wgpu::BufferUsage::COPY_DST
+                    | wgpu::BufferUsage::COPY_SRC,
+            });
 
         BufferWrapper {
             staging: staging_buffer,
@@ -73,9 +81,8 @@ impl GpuWrapper {
         &self.shader
     }
 
-    fn izhikevich_shader() -> Vec<u32> {
-        let cs = include_bytes!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"));
-        wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap()
+    fn izhikevich_shader() -> wgpu::ShaderModuleSource<'static> {
+        wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"))
     }
 }
 
@@ -87,9 +94,6 @@ pub struct BufferWrapper {
 
 impl BufferWrapper {
     pub fn binding_resource(&self) -> wgpu::BindingResource {
-        wgpu::BindingResource::Buffer {
-            buffer: &self.storage,
-            range: 0..self.size,
-        }
+        wgpu::BindingResource::Buffer(self.storage.slice(..))
     }
 }

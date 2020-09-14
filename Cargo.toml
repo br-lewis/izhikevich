@@ -8,15 +8,15 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wgpu = "0.5"
-zerocopy = "0.2.8"
+wgpu = "0.6"
+zerocopy = "0.3.0"
 log = "0.4.0"
 env_logger = "0.7.1"
 rand = "0.7"
-rand_distr = "0.2.2"
+rand_distr = "0.3"
 structopt = "0.3"
-clap = "2.33.0"
-rayon = "1.1"
+clap = "2.33"
+rayon = "1.4"
 tokio = { version = "0.2", features = ["full"] }
 ndarray = {version = "0.13.0", features = ["rayon"]}
 plotters = { version = "0.2", features = ["piston", "line_series", "point_series"] }

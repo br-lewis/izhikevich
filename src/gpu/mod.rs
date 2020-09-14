@@ -1,8 +1,10 @@
 use std::convert::TryInto;
+use std::num::NonZeroU32;
 use std::time;
 
 use ndarray::prelude::*;
 use tokio::sync::mpsc;
+use wgpu::util::DeviceExt;
 use zerocopy::AsBytes;
 
 use super::izhikevich;
@@ -45,10 +47,13 @@ pub(crate) async fn main(
         time_step: 0,
     };
 
-    let config_staging_buffer = gw.device().create_buffer_with_data(
-        config.as_bytes(),
-        wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
-    );
+    let config_staging_buffer = gw
+        .device()
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("config_staging"),
+            contents: config.as_bytes(),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
+        });
 
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
 
@@ -56,6 +61,7 @@ pub(crate) async fn main(
         label: Some("config storage"),
         size: config_buffer_size,
         usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        mapped_at_creation: false,
     });
 
     let initial_thalamic_input = izhikevich::thalamic_input(excitatory, inhibitory);
@@ -64,59 +70,80 @@ pub(crate) async fn main(
 
     // thalamic input uses random noise which is hard to do on a GPU so we generate it on the CPU
     // and copy it over every time step
-    let thalamic_staging_buffer = gw.device().create_buffer_with_data(
-        initial_thalamic_input.as_slice().unwrap().as_bytes(),
-        wgpu::BufferUsage::COPY_SRC | wgpu::BufferUsage::COPY_DST,
-    );
+    let thalamic_staging_buffer =
+        gw.device()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("thalamic_staging"),
+                contents: initial_thalamic_input.as_slice().unwrap().as_bytes(),
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
+            });
 
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
-        label: Some("thalamic storage"),
+        label: Some("thalamic_storage"),
         size: thalamic_buffer_size,
         usage: wgpu::BufferUsage::STORAGE
             | wgpu::BufferUsage::COPY_DST
             | wgpu::BufferUsage::COPY_SRC,
+        mapped_at_creation: false,
     });
 
     let bind_group_layout =
         gw.device()
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: None,
-                bindings: &[
+                entries: &[
+                    // config buffer
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                        count: None,
+                        ty: wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::BufferSize::new(config_buffer_size),
+                        },
                     },
+                    // thalamic
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStage::COMPUTE,
+                        count: NonZeroU32::new(initial_thalamic_input.len() as u32),
                         ty: wgpu::BindingType::StorageBuffer {
                             dynamic: false,
                             readonly: false,
+                            min_binding_size: None,
                         },
                     },
+                    // neuron
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStage::COMPUTE,
+                        count: NonZeroU32::new(neurons.len() as u32),
                         ty: wgpu::BindingType::StorageBuffer {
                             dynamic: false,
                             readonly: false,
+                            min_binding_size: None,
                         },
                     },
+                    // spike
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStage::COMPUTE,
+                        count: NonZeroU32::new(spikes.len() as u32),
                         ty: wgpu::BindingType::StorageBuffer {
                             dynamic: false,
                             readonly: false,
+                            min_binding_size: None,
                         },
                     },
+                    // connections
                     wgpu::BindGroupLayoutEntry {
                         binding: 4,
                         visibility: wgpu::ShaderStage::COMPUTE,
+                        count: NonZeroU32::new(connections.len() as u32),
                         ty: wgpu::BindingType::StorageBuffer {
                             dynamic: false,
                             readonly: false,
+                            min_binding_size: None,
                         },
                     },
                 ],
@@ -125,30 +152,24 @@ pub(crate) async fn main(
     let bind_group = gw.device().create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
-        bindings: &[
-            wgpu::Binding {
+        entries: &[
+            wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &config_storage_buffer,
-                    range: 0..config_buffer_size,
-                },
+                resource: wgpu::BindingResource::Buffer(config_storage_buffer.slice(..))
             },
-            wgpu::Binding {
+            wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &thalamic_storage_buffer,
-                    range: 0..thalamic_buffer_size,
-                },
+                resource: wgpu::BindingResource::Buffer(thalamic_storage_buffer.slice(..)),
             },
-            wgpu::Binding {
+            wgpu::BindGroupEntry {
                 binding: 2,
                 resource: neuron_buffer.binding_resource(),
             },
-            wgpu::Binding {
+            wgpu::BindGroupEntry {
                 binding: 3,
                 resource: spike_buffer.binding_resource(),
             },
-            wgpu::Binding {
+            wgpu::BindGroupEntry {
                 binding: 4,
                 resource: connections_buffer.binding_resource(),
             },
@@ -158,19 +179,23 @@ pub(crate) async fn main(
     let pipeline_layout = gw
         .device()
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("pipeline"),
+            push_constant_ranges: &[],
             bind_group_layouts: &[&bind_group_layout],
         });
 
     let compute_pipeline = gw
         .device()
         .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            layout: &pipeline_layout,
+            label: Some("izhikevich_timestep"),
+            layout: Some(&pipeline_layout),
             compute_stage: wgpu::ProgrammableStageDescriptor {
                 module: gw.shader(),
                 entry_point: "main",
             },
         });
 
+    /*
     let mut encoder = gw
         .device()
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -213,7 +238,8 @@ pub(crate) async fn main(
         thalamic_buffer_size,
     );
 
-    gw.queue().submit(&[encoder.finish()]);
+    gw.queue().submit(Some(encoder.finish()));
+    */
 
     let mut voltages: Vec<f32> = Vec::with_capacity(time_buffer_size);
 
@@ -237,14 +263,21 @@ pub(crate) async fn main(
                 label: Some(&format!("time step {}", t)),
             });
 
-        let config_staging_buffer = gw
-            .device()
-            .create_buffer_with_data(config.as_bytes(), wgpu::BufferUsage::COPY_SRC);
+        let config_staging_buffer =
+            gw.device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("config_staging"),
+                    contents: config.as_bytes(),
+                    usage: wgpu::BufferUsage::COPY_SRC,
+                });
 
-        let input_buffer = gw.device().create_buffer_with_data(
-            thalamic_input.as_slice().unwrap().as_bytes(),
-            wgpu::BufferUsage::COPY_SRC,
-        );
+        let input_buffer = gw
+            .device()
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("thalamic_input"),
+                contents: thalamic_input.as_slice().unwrap().as_bytes(),
+                usage: wgpu::BufferUsage::COPY_SRC,
+            });
 
         encoder.copy_buffer_to_buffer(
             &config_staging_buffer,
@@ -285,23 +318,19 @@ pub(crate) async fn main(
             (neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
         );
 
-        gw.queue().submit(&[encoder.finish()]);
+        gw.queue().submit(Some(encoder.finish()));
 
         //read first neuron voltage
+        let neuron_time_slice = neuron_buffer.staging.slice(..);
+        let neuron_future = neuron_time_slice.map_async(wgpu::MapMode::Read);
+        let spike_time_slice = spike_buffer.staging.slice(..);
+        let spike_future = spike_time_slice.map_async(wgpu::MapMode::Read);
 
-        let neuron_future = neuron_buffer.staging.map_read(
-            0,
-            std::mem::size_of::<izhikevich::Izhikevich>() as wgpu::BufferAddress,
-        );
-        let spike_future = spike_buffer.staging.map_read(
-            (t * neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
-            (neurons.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress,
-        );
         gw.device().poll(wgpu::Maintain::Wait);
 
-        if let Ok(mapping) = neuron_future.await {
-            let raw: Vec<f32> = mapping
-                .as_slice()
+        if let Ok(()) = neuron_future.await {
+            let data = neuron_time_slice.get_mapped_range();
+            let raw: Vec<f32> = data
                 .chunks_exact(4)
                 .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
                 .collect();
@@ -314,9 +343,9 @@ pub(crate) async fn main(
             }
         }
 
-        if let Ok(mapping) = spike_future.await {
-            let spikes: Vec<bool> = mapping
-                .as_slice()
+        if let Ok(()) = spike_future.await {
+            let data = spike_time_slice.get_mapped_range();
+            let spikes: Vec<bool> = data
                 .chunks_exact(4)
                 .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
                 .map(|v| if v > 0 { true } else { false })
