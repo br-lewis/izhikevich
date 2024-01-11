@@ -1,5 +1,3 @@
-use std::iter::FromIterator;
-
 use ndarray::prelude::*;
 use rand::prelude::*;
 use rand_distr::StandardNormal;

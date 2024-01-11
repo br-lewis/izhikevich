@@ -60,14 +60,14 @@ pub(crate) async fn main(
         voltages[t] = v;
         spikes.column_mut(t).assign(&current_spikes);
 
-        let mut vc = voltage_channel.clone();
+        let vc = voltage_channel.clone();
         tokio::spawn(async move {
             if let Err(_) = vc.send(v).await {
                 println!("sending voltage failed");
             }
         });
 
-        let mut sc = spike_channel.clone();
+        let sc = spike_channel.clone();
         tokio::spawn(async move {
             if let Err(_) = sc.send(current_spikes.to_vec()).await {
                 println!("sending spikes failed");
@@ -80,7 +80,6 @@ pub(crate) async fn main(
             println!("{:?}", elapsed);
         });
     }
-
 }
 
 fn connection_input(prev_spikes: &ArrayView1<bool>, connections: &Array2<f32>) -> Array1<f32> {

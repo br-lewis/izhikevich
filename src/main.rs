@@ -37,7 +37,7 @@ struct Args {
 
 fn main() {
     env_logger::init();
-    let mut runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .build()
         .unwrap();

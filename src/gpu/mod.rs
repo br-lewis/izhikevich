@@ -304,7 +304,7 @@ pub(crate) async fn main(
         let v = raw[4];
         voltages.push(v);
 
-        let mut vc = voltage_channel.clone();
+        let vc = voltage_channel.clone();
         if let Err(_) = vc.send(v).await {
             println!("sending voltage failed");
         }
@@ -317,7 +317,7 @@ pub(crate) async fn main(
             .map(|v| if v > 0 { true } else { false })
             .collect();
 
-        let mut sc = spike_channel.clone();
+        let sc = spike_channel.clone();
         if let Err(_) = sc.send(spikes).await {
             println!("sending spikes failed");
         }

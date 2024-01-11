@@ -25,7 +25,7 @@ fn compile_shader(shader: &Path) -> shaderc::CompilationArtifact {
     f.read_to_string(&mut buf)
         .expect("unable to read shader file");
 
-    let mut compiler = shaderc::Compiler::new().expect("error creating shader compiler");
+    let compiler = shaderc::Compiler::new().expect("error creating shader compiler");
     let options = shaderc::CompileOptions::new().expect("error creating shader compiler options");
 
     match compiler.compile_into_spirv(
