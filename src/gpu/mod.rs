@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::num::NonZeroU32;
+use std::sync::mpsc::sync_channel;
 use std::time;
 
 use ndarray::prelude::*;
@@ -52,7 +53,7 @@ pub(crate) async fn main(
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("config_staging"),
             contents: config.as_bytes(),
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
         });
 
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
@@ -60,7 +61,7 @@ pub(crate) async fn main(
     let config_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("config storage"),
         size: config_buffer_size,
-        usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
 
@@ -75,15 +76,15 @@ pub(crate) async fn main(
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("thalamic_staging"),
                 contents: initial_thalamic_input.as_slice().unwrap().as_bytes(),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_SRC,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
             });
 
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("thalamic_storage"),
         size: thalamic_buffer_size,
-        usage: wgpu::BufferUsage::STORAGE
-            | wgpu::BufferUsage::COPY_DST
-            | wgpu::BufferUsage::COPY_SRC,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST
+            | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
 
@@ -95,54 +96,55 @@ pub(crate) async fn main(
                     // config buffer
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStage::COMPUTE,
+                        visibility: wgpu::ShaderStages::COMPUTE,
                         count: None,
-                        ty: wgpu::BindingType::UniformBuffer {
-                            dynamic: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
                             min_binding_size: wgpu::BufferSize::new(config_buffer_size),
                         },
                     },
                     // thalamic
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: wgpu::ShaderStage::COMPUTE,
+                        visibility: wgpu::ShaderStages::COMPUTE,
                         count: NonZeroU32::new(initial_thalamic_input.len() as u32),
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            readonly: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                     },
                     // neuron
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: wgpu::ShaderStage::COMPUTE,
+                        visibility: wgpu::ShaderStages::COMPUTE,
                         count: NonZeroU32::new(neurons.len() as u32),
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            readonly: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                     },
                     // spike
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: wgpu::ShaderStage::COMPUTE,
+                        visibility: wgpu::ShaderStages::COMPUTE,
                         count: NonZeroU32::new(spikes.len() as u32),
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            readonly: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                     },
                     // connections
                     wgpu::BindGroupLayoutEntry {
                         binding: 4,
-                        visibility: wgpu::ShaderStage::COMPUTE,
+                        visibility: wgpu::ShaderStages::COMPUTE,
                         count: NonZeroU32::new(connections.len() as u32),
-                        ty: wgpu::BindingType::StorageBuffer {
-                            dynamic: false,
-                            readonly: false,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
                             min_binding_size: None,
                         },
                     },
@@ -155,11 +157,15 @@ pub(crate) async fn main(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(config_storage_buffer.slice(..))
+                resource: wgpu::BindingResource::Buffer(
+                    config_storage_buffer.as_entire_buffer_binding(),
+                ),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
-                resource: wgpu::BindingResource::Buffer(thalamic_storage_buffer.slice(..)),
+                resource: wgpu::BindingResource::Buffer(
+                    thalamic_storage_buffer.as_entire_buffer_binding(),
+                ),
             },
             wgpu::BindGroupEntry {
                 binding: 2,
@@ -189,57 +195,9 @@ pub(crate) async fn main(
         .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("izhikevich_timestep"),
             layout: Some(&pipeline_layout),
-            compute_stage: wgpu::ProgrammableStageDescriptor {
-                module: gw.shader(),
-                entry_point: "main",
-            },
+            module: gw.shader(),
+            entry_point: "main",
         });
-
-    /*
-    let mut encoder = gw
-        .device()
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("init data entry"),
-        });
-
-    encoder.copy_buffer_to_buffer(
-        &neuron_buffer.staging,
-        0,
-        &neuron_buffer.storage,
-        0,
-        neuron_buffer.size,
-    );
-    encoder.copy_buffer_to_buffer(
-        &spike_buffer.staging,
-        0,
-        &spike_buffer.storage,
-        0,
-        spike_buffer.size,
-    );
-    encoder.copy_buffer_to_buffer(
-        &connections_buffer.staging,
-        0,
-        &connections_buffer.storage,
-        0,
-        connections_buffer.size,
-    );
-    encoder.copy_buffer_to_buffer(
-        &config_staging_buffer,
-        0,
-        &config_storage_buffer,
-        0,
-        config_buffer_size,
-    );
-    encoder.copy_buffer_to_buffer(
-        &thalamic_staging_buffer,
-        0,
-        &thalamic_staging_buffer,
-        0,
-        thalamic_buffer_size,
-    );
-
-    gw.queue().submit(Some(encoder.finish()));
-    */
 
     let mut voltages: Vec<f32> = Vec::with_capacity(time_buffer_size);
 
@@ -268,7 +226,7 @@ pub(crate) async fn main(
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("config_staging"),
                     contents: config.as_bytes(),
-                    usage: wgpu::BufferUsage::COPY_SRC,
+                    usage: wgpu::BufferUsages::COPY_SRC,
                 });
 
         let input_buffer = gw
@@ -276,7 +234,7 @@ pub(crate) async fn main(
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("thalamic_input"),
                 contents: thalamic_input.as_slice().unwrap().as_bytes(),
-                usage: wgpu::BufferUsage::COPY_SRC,
+                usage: wgpu::BufferUsages::COPY_SRC,
             });
 
         encoder.copy_buffer_to_buffer(
@@ -296,10 +254,13 @@ pub(crate) async fn main(
         );
 
         {
-            let mut cpass = encoder.begin_compute_pass();
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("compute pass descriptor"),
+                timestamp_writes: None,
+            });
             cpass.set_pipeline(&compute_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            cpass.dispatch(neurons.len() as u32, 1, 1);
+            cpass.dispatch_workgroups(neurons.len() as u32, 1, 1);
         }
 
         encoder.copy_buffer_to_buffer(
@@ -320,41 +281,45 @@ pub(crate) async fn main(
 
         gw.queue().submit(Some(encoder.finish()));
 
+        let (neuron_tx, neuron_rx) = sync_channel(1);
+        let (spike_tx, spike_rx) = sync_channel(1);
         //read first neuron voltage
         let neuron_time_slice = neuron_buffer.staging.slice(..);
-        let neuron_future = neuron_time_slice.map_async(wgpu::MapMode::Read);
+        neuron_time_slice.map_async(wgpu::MapMode::Read, move |result| {
+            neuron_tx.send(result).unwrap();
+        });
         let spike_time_slice = spike_buffer.staging.slice(..);
-        let spike_future = spike_time_slice.map_async(wgpu::MapMode::Read);
+        spike_time_slice.map_async(wgpu::MapMode::Read, move |result| {
+            spike_tx.send(result).unwrap();
+        });
 
         gw.device().poll(wgpu::Maintain::Wait);
 
-        if let Ok(()) = neuron_future.await {
-            let data = neuron_time_slice.get_mapped_range();
-            let raw: Vec<f32> = data
-                .chunks_exact(4)
-                .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
-                .collect();
-            let v = raw[4];
-            voltages.push(v);
+        neuron_rx.recv().unwrap().unwrap();
+        let data = neuron_time_slice.get_mapped_range();
+        let raw: Vec<f32> = data
+            .chunks_exact(4)
+            .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+            .collect();
+        let v = raw[4];
+        voltages.push(v);
 
-            let mut vc = voltage_channel.clone();
-            if let Err(_) = vc.send(v).await {
-                println!("sending voltage failed");
-            }
+        let mut vc = voltage_channel.clone();
+        if let Err(_) = vc.send(v).await {
+            println!("sending voltage failed");
         }
 
-        if let Ok(()) = spike_future.await {
-            let data = spike_time_slice.get_mapped_range();
-            let spikes: Vec<bool> = data
-                .chunks_exact(4)
-                .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-                .map(|v| if v > 0 { true } else { false })
-                .collect();
+        spike_rx.recv().unwrap().unwrap();
+        let data = spike_time_slice.get_mapped_range();
+        let spikes: Vec<bool> = data
+            .chunks_exact(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .map(|v| if v > 0 { true } else { false })
+            .collect();
 
-            let mut sc = spike_channel.clone();
-            if let Err(_) = sc.send(spikes).await {
-                println!("sending spikes failed");
-            }
+        let mut sc = spike_channel.clone();
+        if let Err(_) = sc.send(spikes).await {
+            println!("sending spikes failed");
         }
 
         t = wrapping_inc(t, time_buffer_size);

@@ -11,11 +11,17 @@ pub struct GpuWrapper {
 
 impl GpuWrapper {
     pub async fn new() -> Self {
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            flags: wgpu::InstanceFlags::DEBUG,
+            dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+        });
         let adapter: wgpu::Adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
+                force_fallback_adapter: false,
             })
             .await
             .expect("error creating adapter");
@@ -23,9 +29,9 @@ impl GpuWrapper {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
+                    label: Some("device descriptor"),
                     features: wgpu::Features::empty(),
                     limits: wgpu::Limits::default(),
-                    shader_validation: true,
                 },
                 None,
             )
@@ -47,8 +53,7 @@ impl GpuWrapper {
         let staging_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
             label: Some(""),
             size,
-            usage: wgpu::BufferUsage::MAP_READ
-                | wgpu::BufferUsage::COPY_DST,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -57,9 +62,9 @@ impl GpuWrapper {
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(""),
                 contents: data.as_bytes(),
-                usage: wgpu::BufferUsage::STORAGE
-                    | wgpu::BufferUsage::COPY_DST
-                    | wgpu::BufferUsage::COPY_SRC,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_DST
+                    | wgpu::BufferUsages::COPY_SRC,
             });
 
         BufferWrapper {
@@ -81,7 +86,7 @@ impl GpuWrapper {
         &self.shader
     }
 
-    fn izhikevich_shader() -> wgpu::ShaderModuleSource<'static> {
+    fn izhikevich_shader() -> wgpu::ShaderModuleDescriptor<'static> {
         wgpu::include_spirv!(concat!(env!("OUT_DIR"), "/", "izhikevich.comp.spv"))
     }
 }
@@ -94,6 +99,6 @@ pub struct BufferWrapper {
 
 impl BufferWrapper {
     pub fn binding_resource(&self) -> wgpu::BindingResource {
-        wgpu::BindingResource::Buffer(self.storage.slice(..))
+        wgpu::BindingResource::Buffer(self.storage.as_entire_buffer_binding())
     }
 }

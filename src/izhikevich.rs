@@ -3,9 +3,9 @@ use std::iter::FromIterator;
 use ndarray::prelude::*;
 use rand::prelude::*;
 use rand_distr::StandardNormal;
-use zerocopy::{FromBytes, AsBytes};
+use zerocopy::{AsBytes, FromBytes, FromZeroes};
 
-#[derive(Debug, Copy, Clone, FromBytes, AsBytes)]
+#[derive(Debug, Copy, Clone, FromZeroes, FromBytes, AsBytes)]
 #[repr(C)]
 pub struct Izhikevich {
     pub decay_rate: f32,
