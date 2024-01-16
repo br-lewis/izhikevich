@@ -4,7 +4,7 @@ use std::sync::mpsc::sync_channel;
 use std::time;
 
 use ndarray::prelude::*;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use wgpu::util::DeviceExt;
 use zerocopy::AsBytes;
 
@@ -36,10 +36,10 @@ pub(crate) async fn main(
 
     let mut gw: GpuWrapper = GpuWrapper::new().await;
 
-    let neuron_buffer = gw.create_buffer(neurons.as_slice().unwrap());
+    let neuron_buffer = gw.create_buffer("neurons", neurons.as_slice().unwrap());
     // this will be created with more permissions than it needs since it's readonly right now
-    let connections_buffer = gw.create_buffer(connections.as_slice().unwrap());
-    let spike_buffer = gw.create_buffer(&spikes.as_slice().unwrap());
+    let connections_buffer = gw.create_buffer("connections", connections.as_slice().unwrap());
+    let spike_buffer = gw.create_buffer("spikes", &spikes.as_slice().unwrap());
 
     // TODO: try to generally clean up the rest of the buffer and bind group creation
     let config = Config {
@@ -48,20 +48,21 @@ pub(crate) async fn main(
         time_step: 0,
     };
 
-    let config_staging_buffer = gw
-        .device()
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("config_staging"),
-            contents: config.as_bytes(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
-        });
-
+    /*
+       let config_staging_buffer = gw
+           .device()
+           .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+               label: Some("config_staging"),
+               contents: config.as_bytes(),
+               usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
+           });
+    */
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
 
     let config_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
-        label: Some("config storage"),
+        label: Some("config_storage"),
         size: config_buffer_size,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -71,14 +72,15 @@ pub(crate) async fn main(
 
     // thalamic input uses random noise which is hard to do on a GPU so we generate it on the CPU
     // and copy it over every time step
-    let thalamic_staging_buffer =
-        gw.device()
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("thalamic_staging"),
-                contents: initial_thalamic_input.as_slice().unwrap().as_bytes(),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
-            });
-
+    /*
+       let thalamic_staging_buffer =
+           gw.device()
+               .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                   label: Some("thalamic_staging"),
+                   contents: initial_thalamic_input.as_slice().unwrap().as_bytes(),
+                   usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
+               });
+    */
     let thalamic_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
         label: Some("thalamic_storage"),
         size: thalamic_buffer_size,
@@ -91,7 +93,7 @@ pub(crate) async fn main(
     let bind_group_layout =
         gw.device()
             .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
+                label: Some("izhikevich_sim_step_bind_group_layout"),
                 entries: &[
                     // config buffer
                     wgpu::BindGroupLayoutEntry {
@@ -108,7 +110,8 @@ pub(crate) async fn main(
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        count: NonZeroU32::new(initial_thalamic_input.len() as u32),
+                        //count: NonZeroU32::new(initial_thalamic_input.len() as u32),
+                        count: None,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -119,7 +122,8 @@ pub(crate) async fn main(
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        count: NonZeroU32::new(neurons.len() as u32),
+                        // count: NonZeroU32::new(neurons.len() as u32),
+                        count: None,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -130,7 +134,8 @@ pub(crate) async fn main(
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        count: NonZeroU32::new(spikes.len() as u32),
+                        //count: NonZeroU32::new(spikes.len() as u32),
+                        count: None,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -141,7 +146,8 @@ pub(crate) async fn main(
                     wgpu::BindGroupLayoutEntry {
                         binding: 4,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        count: NonZeroU32::new(connections.len() as u32),
+                        // count: NonZeroU32::new(connections.len() as u32),
+                        count: None,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
@@ -204,6 +210,7 @@ pub(crate) async fn main(
     let mut t: usize = 0;
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
     loop {
+        println!("{}", t);
         interval.tick().await;
         let timer = time::Instant::now();
 
@@ -281,46 +288,51 @@ pub(crate) async fn main(
 
         gw.queue().submit(Some(encoder.finish()));
 
-        let (neuron_tx, neuron_rx) = sync_channel(1);
-        let (spike_tx, spike_rx) = sync_channel(1);
-        //read first neuron voltage
-        let neuron_time_slice = neuron_buffer.staging.slice(..);
-        neuron_time_slice.map_async(wgpu::MapMode::Read, move |result| {
-            neuron_tx.send(result).unwrap();
-        });
-        let spike_time_slice = spike_buffer.staging.slice(..);
-        spike_time_slice.map_async(wgpu::MapMode::Read, move |result| {
-            spike_tx.send(result).unwrap();
-        });
+        {
+            let (neuron_tx, mut neuron_rx) = oneshot::channel();
+            let (spike_tx, mut spike_rx) = oneshot::channel();
+            //read first neuron voltage
+            let neuron_time_slice = neuron_buffer.staging.slice(..);
+            neuron_time_slice.map_async(wgpu::MapMode::Read, move |result| {
+                neuron_tx.send(result).unwrap();
+            });
+            let spike_time_slice = spike_buffer.staging.slice(..);
+            spike_time_slice.map_async(wgpu::MapMode::Read, move |result| {
+                spike_tx.send(result).unwrap();
+            });
 
-        gw.device().poll(wgpu::Maintain::Wait);
+            gw.device().poll(wgpu::Maintain::Wait);
 
-        neuron_rx.recv().unwrap().unwrap();
-        let data = neuron_time_slice.get_mapped_range();
-        let raw: Vec<f32> = data
-            .chunks_exact(4)
-            .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
-            .collect();
-        let v = raw[4];
-        voltages.push(v);
+            neuron_rx.try_recv().unwrap().unwrap();
+            let data = neuron_time_slice.get_mapped_range();
+            let raw: Vec<f32> = data
+                .chunks_exact(4)
+                .map(|b| f32::from_ne_bytes(b.try_into().unwrap()))
+                .collect();
+            let v = raw[4];
+            voltages.push(v);
 
-        let vc = voltage_channel.clone();
-        if let Err(_) = vc.send(v).await {
-            println!("sending voltage failed");
+            let vc = voltage_channel.clone();
+            if let Err(_) = vc.send(v).await {
+                println!("sending voltage failed");
+            }
+
+            spike_rx.try_recv().unwrap().unwrap();
+            let data = spike_time_slice.get_mapped_range();
+            let spikes: Vec<bool> = data
+                .chunks_exact(4)
+                .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+                .map(|v| if v > 0 { true } else { false })
+                .collect();
+
+            let sc = spike_channel.clone();
+            if let Err(_) = sc.send(spikes).await {
+                println!("sending spikes failed");
+            }
         }
 
-        spike_rx.recv().unwrap().unwrap();
-        let data = spike_time_slice.get_mapped_range();
-        let spikes: Vec<bool> = data
-            .chunks_exact(4)
-            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .map(|v| if v > 0 { true } else { false })
-            .collect();
-
-        let sc = spike_channel.clone();
-        if let Err(_) = sc.send(spikes).await {
-            println!("sending spikes failed");
-        }
+        neuron_buffer.staging.unmap();
+        spike_buffer.staging.unmap();
 
         t = wrapping_inc(t, time_buffer_size);
 

@@ -30,7 +30,7 @@ impl GpuWrapper {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("device descriptor"),
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                     limits: wgpu::Limits::default(),
                 },
                 None,
@@ -47,11 +47,15 @@ impl GpuWrapper {
         }
     }
 
-    pub fn create_buffer<T: 'static + Copy + AsBytes>(&self, data: &[T]) -> BufferWrapper {
+    pub fn create_buffer<T: 'static + Copy + AsBytes>(
+        &self,
+        name: &str,
+        data: &[T],
+    ) -> BufferWrapper {
         let size = (data.len() * mem::size_of::<T>()) as wgpu::BufferAddress;
 
         let staging_buffer = self.device().create_buffer(&wgpu::BufferDescriptor {
-            label: Some(""),
+            label: Some(&format!("{}_staging", name)),
             size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -60,7 +64,7 @@ impl GpuWrapper {
         let storage_buffer = self
             .device()
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(""),
+                label: Some(&format!("{}_storage", name)),
                 contents: data.as_bytes(),
                 usage: wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_DST

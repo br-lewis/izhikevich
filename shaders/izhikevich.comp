@@ -27,24 +27,24 @@ layout(set = 0, binding = 0) uniform Config {
 };
 
 layout(set = 0, binding = 1) buffer Input {
-    float[] thalamic;
+    float thalamic[];
 };
 
 // possibly useful to split this buffer into 2
 // 1 to hold the neuron parameters that don't change
 // 1 to hold the neuron state which changes every tick
 layout(set = 0, binding = 2) buffer Neurons {
-    Neuron[] neurons;
+    Neuron neurons[];
 };
 
 layout(set = 0, binding = 3) buffer Spikes {
     // 2D array of spikes for a given timestep
-    uint[] spikes;
+    uint spikes[];
 };
 
 layout(set = 0, binding = 4) buffer Connections {
     // 2D array of connection weights between neurons
-    float[] connections;
+    float connections[];
 };
 
 // map 2D coordinate to 1D location in flattened arrays
