@@ -210,7 +210,6 @@ pub(crate) async fn main(
     let mut t: usize = 0;
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
     loop {
-        println!("{}", t);
         interval.tick().await;
         let timer = time::Instant::now();
 
