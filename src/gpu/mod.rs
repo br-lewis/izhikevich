@@ -1,6 +1,4 @@
 use std::convert::TryInto;
-use std::num::NonZeroU32;
-use std::sync::mpsc::sync_channel;
 use std::time;
 
 use ndarray::prelude::*;
@@ -41,22 +39,6 @@ pub(crate) async fn main(
     let connections_buffer = gw.create_buffer("connections", connections.as_slice().unwrap());
     let spike_buffer = gw.create_buffer("spikes", &spikes.as_slice().unwrap());
 
-    // TODO: try to generally clean up the rest of the buffer and bind group creation
-    let config = Config {
-        neurons: (excitatory + inhibitory) as u32,
-        total_time_steps: time_buffer_size as u32,
-        time_step: 0,
-    };
-
-    /*
-       let config_staging_buffer = gw
-           .device()
-           .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-               label: Some("config_staging"),
-               contents: config.as_bytes(),
-               usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_SRC,
-           });
-    */
     let config_buffer_size = std::mem::size_of::<Config>() as wgpu::BufferAddress;
 
     let config_storage_buffer = gw.device().create_buffer(&wgpu::BufferDescriptor {
@@ -211,7 +193,7 @@ pub(crate) async fn main(
     let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(1));
     loop {
         interval.tick().await;
-        let timer = time::Instant::now();
+        let _timer = time::Instant::now();
 
         let config = Config {
             neurons: neurons.len() as u32,
@@ -227,6 +209,8 @@ pub(crate) async fn main(
                 label: Some(&format!("time step {}", t)),
             });
 
+        // TODO: since only `time_step` updates, it might be possible to only copy that instead of this whole struct
+        // though it's quite small anyway
         let config_staging_buffer =
             gw.device()
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -335,8 +319,8 @@ pub(crate) async fn main(
 
         t = wrapping_inc(t, time_buffer_size);
 
-        let elapsed = timer.elapsed();
         /*
+            let elapsed = timer.elapsed();
             tokio::spawn(async move {
                 println!("{:?}", elapsed);
             });
