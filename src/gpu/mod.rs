@@ -336,9 +336,11 @@ pub(crate) async fn main(
         t = wrapping_inc(t, time_buffer_size);
 
         let elapsed = timer.elapsed();
-        tokio::spawn(async move {
-            println!("{:?}", elapsed);
-        });
+        /*
+            tokio::spawn(async move {
+                println!("{:?}", elapsed);
+            });
+        */
     }
 }
 

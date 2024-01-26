@@ -30,8 +30,8 @@ impl GpuWrapper {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("device descriptor"),
-                    features: wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
-                    limits: wgpu::Limits::default(),
+                    required_features: wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                    required_limits: wgpu::Limits::default(),
                 },
                 None,
             )
